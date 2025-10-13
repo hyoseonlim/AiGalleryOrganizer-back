@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:front/features/gallery/domain/gallery_domain.dart';
+import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 
 class GalleryPage extends StatefulWidget {
   const GalleryPage({super.key});
@@ -18,12 +20,41 @@ class _GalleryPageState extends State<GalleryPage> {
   bool _isMultiSelectMode = false;
   final Set<String> _selectedPhotos = {}; // Using a unique ID for each photo
 
+  // Upload progress state
+  bool _isUploading = false;
+  int _uploadCurrent = 0;
+  int _uploadTotal = 0;
+
   void _toggleMultiSelectMode() {
     setState(() {
       _isMultiSelectMode = !_isMultiSelectMode;
       if (!_isMultiSelectMode) {
         _selectedPhotos.clear();
       }
+    });
+  }
+
+  void _updateUploadProgress(int current, int total) {
+    setState(() {
+      _uploadCurrent = current;
+      _uploadTotal = total;
+      _isUploading = current < total;
+    });
+  }
+
+  void _startUpload() {
+    setState(() {
+      _isUploading = true;
+      _uploadCurrent = 0;
+      _uploadTotal = 0;
+    });
+  }
+
+  void _finishUpload() {
+    setState(() {
+      _isUploading = false;
+      _uploadCurrent = 0;
+      _uploadTotal = 0;
     });
   }
 
@@ -46,33 +77,175 @@ class _GalleryPageState extends State<GalleryPage> {
     }
   }
 
+  Future<void> _handlePickFile() async {
+    _startUpload();
+    try {
+      final result = await pickFile(
+        onProgress: (current, total) {
+          _updateUploadProgress(current, total);
+        },
+      );
+
+      _finishUpload();
+
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${result['successCount']}/${result['totalFiles']} 파일 업로드 완료'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _finishUpload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('업로드 중 오류 발생: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handlePickFolder() async {
+    _startUpload();
+    try {
+      final result = await pickFolder(
+        onProgress: (current, total) {
+          _updateUploadProgress(current, total);
+        },
+      );
+
+      _finishUpload();
+
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${result['successCount']}/${result['totalFiles']} 파일 업로드 완료'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _finishUpload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('업로드 중 오류 발생: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleOpenGallery() async {
+    _startUpload();
+    try {
+      final result = await openGallery(
+        onProgress: (current, total) {
+          _updateUploadProgress(current, total);
+        },
+      );
+
+      _finishUpload();
+
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${result['successCount']}/${result['totalFiles']} 이미지 업로드 완료'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _finishUpload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('업로드 중 오류 발생: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _buildAppBar(),
-      body: ListView.builder(
-        itemCount: _photoSections.length,
-        itemBuilder: (context, index) {
-          final date = _photoSections.keys.elementAt(index);
-          final imageCount = _photoSections.values.elementAt(index);
-          return _DateSection(
-            date: date,
-            imageCount: imageCount,
-            selectedPhotos: _selectedPhotos,
-            isMultiSelectMode: _isMultiSelectMode,
-            onPhotoTap: _onPhotoTap,
-            onPhotoLongPress: _onPhotoLongPress,
-          );
-        },
-      ),
-      floatingActionButton: _isMultiSelectMode
-          ? null
-          : FloatingActionButton(
-              onPressed: () {
-                // TODO: Implement add photo action
-              },
-              child: const Icon(Icons.add),
+      body: Stack(
+        children: [
+          ListView.builder(
+            itemCount: _photoSections.length,
+            itemBuilder: (context, index) {
+              final date = _photoSections.keys.elementAt(index);
+              final imageCount = _photoSections.values.elementAt(index);
+              return _DateSection(
+                date: date,
+                imageCount: imageCount,
+                selectedPhotos: _selectedPhotos,
+                isMultiSelectMode: _isMultiSelectMode,
+                onPhotoTap: _onPhotoTap,
+                onPhotoLongPress: _onPhotoLongPress,
+              );
+            },
+          ),
+          // Upload progress indicator on the left side
+          if (_isUploading)
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: _UploadProgressIndicator(
+                current: _uploadCurrent,
+                total: _uploadTotal,
+              ),
             ),
+        ],
+      ),
+      floatingActionButtonLocation: ExpandableFab.location,
+      floatingActionButton: _isMultiSelectMode
+      ? null
+      : ExpandableFab(
+        openButtonBuilder: RotateFloatingActionButtonBuilder(
+          child: const Icon(Icons.add),
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+        ),
+        closeButtonBuilder: DefaultFloatingActionButtonBuilder(
+          child: const Icon(Icons.close),
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+        ),
+        type: ExpandableFabType.up,
+        distance: 70,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'file',
+            onPressed: _handlePickFile,
+            tooltip: '파일 선택',
+            child: const Icon(Icons.insert_drive_file),
+          ),
+          FloatingActionButton.small(
+            heroTag: 'folder',
+            onPressed: _handlePickFolder,
+            tooltip: '폴더 선택',
+            child: const Icon(Icons.folder_open),
+          ),
+          FloatingActionButton.small(
+            heroTag: 'gallery',
+            onPressed: _handleOpenGallery,
+            tooltip: '갤러리 열기',
+            child: const Icon(Icons.photo_library),
+          ),
+        ],
+      ),
     );
   }
 
@@ -220,8 +393,77 @@ class _PhotoItem extends StatelessWidget {
             ),
           if (isSelected)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadProgressIndicator extends StatelessWidget {
+  final int current;
+  final int total;
+
+  const _UploadProgressIndicator({
+    required this.current,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = total > 0 ? current / total : 0.0;
+
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Circular progress indicator
+          SizedBox(
+            width: 64,
+            height: 64,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 4,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).primaryColor,
+              ),
+            ),
+          ),
+          // Text showing progress
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$current',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                '/ $total',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
