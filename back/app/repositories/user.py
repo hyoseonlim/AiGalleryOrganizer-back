@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserUpdate
 
 class UserRepository:
     def __init__(self, db: Session):
@@ -16,8 +16,8 @@ class UserRepository:
     def find_all(self, skip: int = 0, limit: int = 100) -> List[User]:
         return self.db.query(User).offset(skip).limit(limit).all()
     
-    def create(self, user_data: UserCreate) -> User:
-        db_user = User(**user_data.model_dump())
+    def create(self, user_data: Dict[str, Any]) -> User:
+        db_user = User(**user_data)
         self.db.add(db_user)
         self.db.commit()
         self.db.refresh(db_user)

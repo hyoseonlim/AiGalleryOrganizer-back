@@ -4,32 +4,38 @@ from typing import List
 
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.security import get_password_hash
+
 
 class UserService:
     def __init__(self, db: Session):
         self.repository = UserRepository(db)
-    
+
     def get_user(self, user_id: int) -> UserResponse:
         user = self.repository.find_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"User with id {user_id} not found"
+                detail=f"User with id {user_id} not found",
             )
         return UserResponse.model_validate(user)
-    
+
     def get_users(self, skip: int = 0, limit: int = 100) -> List[UserResponse]:
         users = self.repository.find_all(skip=skip, limit=limit)
         return [UserResponse.model_validate(user) for user in users]
-    
+
     def create_user(self, user_data: UserCreate) -> UserResponse:
         if self.repository.find_by_email(user_data.email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
             )
         
-        user = self.repository.create(user_data)
+        user_dict = user_data.model_dump()
+        password = user_dict.pop("password")
+        user_dict["hashed_password"] = get_password_hash(password)
+        
+        user = self.repository.create(user_dict)
         return UserResponse.model_validate(user)
     
     def update_user(self, user_id: int, user_data: UserUpdate) -> UserResponse:
