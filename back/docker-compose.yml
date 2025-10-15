@@ -22,7 +22,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - ./app:/app/app
+      - ~/.aws:/root/.aws:ro # Mount AWS credentials
     environment:
       - DATABASE_URL=postgresql://vizota_user:vizota_pass@db:5432/vizota_db
       - DEBUG=True

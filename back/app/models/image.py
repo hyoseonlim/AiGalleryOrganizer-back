@@ -1,5 +1,5 @@
 # back/app/models/image.py
-from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Float
+from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Float, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -17,9 +17,10 @@ class Image(Base):
 
     id = Column("image_id", Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    url = Column(String, nullable=False)
-    hash = Column(String, nullable=False, unique=True)
-    size = Column(Integer, nullable=False)
+    url = Column(String, nullable=True)
+    hash = Column(String, nullable=True, unique=True)
+    size = Column(Integer, nullable=True)
+    is_saved = Column(Boolean, default=False, nullable=False)
     uploaded_at = Column(TIMESTAMP(timezone=True), default=func.now(), nullable=False)
     deleted_at = Column(TIMESTAMP(timezone=True), nullable=True)
     ai_embedding = Column(String) # pgvector의 VECTOR(512) 타입에 해당

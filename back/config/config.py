@@ -14,7 +14,12 @@ class Settings(BaseSettings):
     DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
     
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this")
+    SECRET_KEY: str
+
+    # AWS S3 Settings
+    AWS_PROFILE: str = os.getenv("AWS_PROFILE", "general-server-dev")
+    AWS_REGION: str = os.getenv("AWS_REGION", "ap-northeast-2")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "vizota-bucket")
     
     class Config:
         env_file = ".env"
