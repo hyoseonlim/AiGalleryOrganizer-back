@@ -11,7 +11,6 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     password = Column(String, nullable=False)
     username = Column(String, nullable=True)
-    age = Column(Integer, nullable=True)
     is_active = Column(Boolean, default=True)
     storage_limit = Column(BigInteger, nullable=True)
     storage_used = Column(BigInteger, nullable=True)

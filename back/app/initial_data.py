@@ -13,8 +13,8 @@ def seed_data():
             print("Seeding initial data...")
 
             # 사용자 생성
-            user1 = User(username="user1", email="user1@example.com", password="1111")
-            user2 = User(username="user2", email="user2@example.com", password="2222")
+            user1 = User(username="user1", email="user1@example.com", password="11111111")
+            user2 = User(username="user2", email="user2@example.com", password="22222222")
 
             db.add_all([user1, user2])
             db.commit()

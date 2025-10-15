@@ -1,4 +1,10 @@
-# 프로젝트 구조
+# 🚀 Vizota Backend
+
+FastAPI 기반의 백엔드 서버입니다.  
+[Vizota Backend API](http://localhost:8000/docs) 를 클릭하면 API 문서(Swagger UI)로 이동할 수 있습니다.
+<br><br>
+
+## 프로젝트 구조
 ```
 back/
 ├── app/
@@ -20,7 +26,7 @@ back/
 ```
 <br>
 
-# 실행 방법
+## 실행 방법
 ### 서버 시작
 docker-compose up
 
