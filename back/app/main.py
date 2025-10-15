@@ -1,6 +1,8 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.database import Base, engine
+from app.models import album, association, image, tag, user
 from app.routers import users, images
 
 app = FastAPI(
@@ -38,7 +40,11 @@ app.include_router(images.router, prefix="/api/images", tags=["images"])
 # Startup/Shutdown 이벤트
 @app.on_event("startup")
 async def startup_event():
+    print("db table creating..")
+    Base.metadata.create_all(bind=engine)
+    print("db table created!")
     print("🚀 Vizota API Server Started!")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

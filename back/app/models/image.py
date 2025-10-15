@@ -1,12 +1,11 @@
 # back/app/models/image.py
-from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Float
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
-
-# AI 처리 상태 Enum
 import enum
+
 class AIProcessingStatus(enum.Enum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
@@ -14,21 +13,31 @@ class AIProcessingStatus(enum.Enum):
     FAILED = "FAILED"
 
 class Image(Base):
-    __tablename__ = "image"
+    __tablename__ = "images"
 
-    image_id = Column(Integer, primary_key=True, index=True) # PK
-    user_id = Column(Integer, ForeignKey("user.id"), nullable=False) # FK (유저ID)
-    
-    path = Column(String, nullable=False)
-    hash = Column(String, nullable=False)
+    id = Column("image_id", Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    url = Column(String, nullable=False)
+    hash = Column(String, nullable=False, unique=True)
     size = Column(Integer, nullable=False)
     uploaded_at = Column(TIMESTAMP(timezone=True), default=func.now(), nullable=False)
-    deleted_at = Column(TIMESTAMP(timezone=True), nullable=True) # default null
-    
-    # VECTOR(512)는 String으로 대체 (실제로는 pgvector 확장과 함께 TypeDecorator 사용 필요)
-    ai_embedding = Column(String, nullable=False) 
-    metadata = Column(JSONB, nullable=True)
-    type = Column(Enum(AIProcessingStatus), default=AIProcessingStatus.PENDING, nullable=False)
+    deleted_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    ai_embedding = Column(String) # pgvector의 VECTOR(512) 타입에 해당
+    exif = Column(JSONB, nullable=True)
+    ai_processing_status = Column(Enum(AIProcessingStatus), default=AIProcessingStatus.PENDING)
 
-    # Relationship 정의 (선택적)
-    owner = relationship("User")
+    owner = relationship("User", back_populates="images")
+    tags = relationship("ImageTag", back_populates="image")
+    albums = relationship("AlbumImage", back_populates="image")
+
+class AIProcessingQueue(Base):
+    __tablename__ = "ai_processing_queue"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_id = Column(Integer, ForeignKey("images.image_id"), nullable=False)
+    status = Column(Enum(AIProcessingStatus), default=AIProcessingStatus.PENDING)
+    created_at = Column(TIMESTAMP(timezone=True), default=func.now())
+    started_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    image = relationship("Image")

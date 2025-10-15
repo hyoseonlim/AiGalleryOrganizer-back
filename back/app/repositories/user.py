@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
-from app.models.user import User
+from app.models import User
 from app.schemas.user import UserUpdate
 
 class UserRepository:

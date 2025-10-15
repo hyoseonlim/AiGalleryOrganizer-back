@@ -4,7 +4,6 @@ from typing import List
 
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
-from app.security import get_password_hash
 
 
 class UserService:
@@ -32,8 +31,6 @@ class UserService:
             )
         
         user_dict = user_data.model_dump()
-        password = user_dict.pop("password")
-        user_dict["hashed_password"] = get_password_hash(password)
         
         user = self.repository.create(user_dict)
         return UserResponse.model_validate(user)
