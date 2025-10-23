@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app.models import album, association, image, tag, user
-from app.routers import users, images
+from app.routers import users, images, auth
 
 app = FastAPI(
     title="Vizota API",
@@ -34,6 +34,7 @@ def health_check():
     return {"status": "healthy"}
 
 # 라우터 등록
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(images.router, prefix="/api/images", tags=["images"])
 

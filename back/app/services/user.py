@@ -1,15 +1,23 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from typing import List
+from typing import List, Optional
 
 from app.models.user import User
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 
 
+from app.security import get_password_hash, verify_password
+
 class UserService:
     def __init__(self, repository: UserRepository):
         self.repository = repository
+
+    def authenticate_user(self, email: str, password: str) -> Optional[User]:
+        user = self.repository.find_by_email(email)
+        if not user or not verify_password(password, user.password):
+            return None
+        return user
 
     def get_user(self, user_id: int) -> User:
         user = self.repository.find_by_id(user_id)
@@ -32,6 +40,7 @@ class UserService:
             )
         
         user_dict = user_data.model_dump()
+        user_dict["password"] = get_password_hash(user_data.password)
         
         user = self.repository.create(user_dict)
         return UserResponse.model_validate(user)
