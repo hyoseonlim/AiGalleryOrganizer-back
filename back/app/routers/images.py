@@ -49,18 +49,8 @@ def notify_upload_complete(
     """
     Notify the server that an image upload is complete and trigger processing.
     """
-    # --- TEMPORARY FIX for testing without authentication ---
-    # This should be replaced by a real authentication system.
-    # In a real scenario, the user would be retrieved from a dependency.
-    temp_user = db.query(User).filter(User.id == 1).first()
-    if not temp_user:
-        # This part is unlikely to be hit if the first endpoint was called, but for safety:
-        temp_user = User(id=1, email="testuser@example.com", password="a-dummy-password")
-        db.add(temp_user)
-        db.commit()
-        db.refresh(temp_user)
-    current_user = temp_user
-    # --- END OF TEMPORARY FIX ---
+    # TODO JWT 인증 구현 후 ==1로 픽스해둔 거 고치기. (이때 docker-compose.yml에 secret key도 처리 필요)
+    current_user = db.query(User).filter(User.id == 1).first()
 
     service = ImageService(db)
     return service.notify_upload_complete(
