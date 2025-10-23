@@ -14,8 +14,8 @@ from config.config import settings
 logger = logging.getLogger(__name__)
 
 class ImageService:
-    def __init__(self, db: Session):
-        self.repository = ImageRepository(db)
+    def __init__(self, repository: ImageRepository):
+        self.repository = repository
 
     def request_upload_urls(
         self, *, s3_client, image_count: int, user: User

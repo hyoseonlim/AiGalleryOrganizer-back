@@ -2,22 +2,23 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import List
 
+from app.models.user import User
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 
 
 class UserService:
-    def __init__(self, db: Session):
-        self.repository = UserRepository(db)
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
 
-    def get_user(self, user_id: int) -> UserResponse:
+    def get_user(self, user_id: int) -> User:
         user = self.repository.find_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User with id {user_id} not found",
             )
-        return UserResponse.model_validate(user)
+        return user
 
     def get_users(self, skip: int = 0, limit: int = 100) -> List[UserResponse]:
         users = self.repository.find_all(skip=skip, limit=limit)
