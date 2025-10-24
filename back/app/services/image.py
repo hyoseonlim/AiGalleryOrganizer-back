@@ -79,3 +79,22 @@ class ImageService:
         except Exception as e:
             logger.error(f"An error occurred: {e}")
             raise HTTPException(status_code=500, detail="An internal error occurred.")
+
+    def get_viewable_url(self, *, image_id: int, user: User) -> str:
+        if not settings.CLOUDFRONT_DOMAIN:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="CloudFront domain is not configured."
+            )
+
+        image = self.repository.find_by_id(image_id)
+
+        if not image:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+        if image.user_id != user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not authorized.")
+
+        if not image.is_saved:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image processing is not complete.")
+
+        return f"https://{settings.CLOUDFRONT_DOMAIN}/{image.url}"

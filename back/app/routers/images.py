@@ -9,6 +9,7 @@ from app.schemas.image import (
     ImageUploadResponse,
     UploadCompleteRequest,
     UploadCompleteResponse,
+    ImageViewableResponse,
 )
 from app.models.user import User
 from app.services.image import ImageService
@@ -50,3 +51,17 @@ def notify_upload_complete(
         image_id=request.image_id,
         user=current_user
     )
+
+
+@router.get("/{image_id}/view", response_model=ImageViewableResponse)
+def get_viewable_image_url(
+    image_id: int,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get a publicly viewable URL for a completed image.
+    The URL is served via CloudFront.
+    """
+    url = image_service.get_viewable_url(image_id=image_id, user=current_user)
+    return ImageViewableResponse(image_id=image_id, url=url)

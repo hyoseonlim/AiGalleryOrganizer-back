@@ -19,3 +19,8 @@ class UploadCompleteResponse(BaseModel):
     image_id: int
     status: str
     hash: str
+
+
+class ImageViewableResponse(BaseModel):
+    image_id: int
+    url: str
