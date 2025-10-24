@@ -21,3 +21,6 @@ class UserResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class UserInDB(UserResponse):
+    hashed_refresh_token: Optional[str] = None

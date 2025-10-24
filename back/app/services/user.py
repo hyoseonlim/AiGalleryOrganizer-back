@@ -65,3 +65,10 @@ class UserService:
             )
         
         self.repository.delete(user)
+
+    def update_refresh_token(self, user: User, hashed_refresh_token: Optional[str]) -> User:
+        user.hashed_refresh_token = hashed_refresh_token
+        self.repository.db.add(user)
+        self.repository.db.commit()
+        self.repository.db.refresh(user)
+        return user

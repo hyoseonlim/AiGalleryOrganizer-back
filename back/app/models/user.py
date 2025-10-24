@@ -18,6 +18,7 @@ class User(Base):
     updated_at = Column(TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     preferences = Column(JSONB, nullable=True)
+    hashed_refresh_token = Column(String, nullable=True)
 
     images = relationship("Image", back_populates="owner")
     albums = relationship("Album", back_populates="owner")
