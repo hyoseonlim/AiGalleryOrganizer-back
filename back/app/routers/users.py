@@ -2,10 +2,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 
-from app.dependencies import get_user_service, get_current_user
+from app.dependencies import get_user_service, get_current_user, get_image_service
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.image import ImageResponse
 from app.services.user import UserService
+from app.services.image import ImageService
 
 router = APIRouter(
     prefix="/users",
@@ -24,6 +26,14 @@ def create_user(
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """현재 사용자 정보 조회"""
     return current_user
+
+@router.get("/me/images", response_model=List[ImageResponse])
+def get_my_images(
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Get all images for the current user."""
+    return image_service.get_all_images_by_user(user=current_user)
 
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(

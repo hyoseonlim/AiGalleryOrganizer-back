@@ -1,6 +1,7 @@
 # app/routers/images.py
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.dependencies import get_db, get_image_service, get_user_service, get_current_user
 from app.aws import get_s3_client
@@ -10,6 +11,7 @@ from app.schemas.image import (
     UploadCompleteRequest,
     UploadCompleteResponse,
     ImageViewableResponse,
+    ImageResponse,
 )
 from app.models.user import User
 from app.services.image import ImageService
@@ -65,3 +67,49 @@ def get_viewable_image_url(
     """
     url = image_service.get_viewable_url(image_id=image_id, user=current_user)
     return ImageViewableResponse(image_id=image_id, url=url)
+
+@router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+def soft_delete_image(
+    image_id: int,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Soft delete an image. The image will be moved to trash.
+    """
+    image_service.soft_delete_image(image_id=image_id, user=current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.get("/trash", response_model=List[ImageResponse])
+def get_trashed_images(
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get all soft-deleted images for the current user.
+    """
+    return image_service.get_trashed_images(user=current_user)
+
+@router.post("/{image_id}/restore", response_model=ImageResponse)
+def restore_image(
+    image_id: int,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Restore a soft-deleted image from trash.
+    """
+    return image_service.restore_image(image_id=image_id, user=current_user)
+
+@router.delete("/trash/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+def permanently_delete_image(
+    image_id: int,
+    s3_client=Depends(get_s3_client),
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Permanently delete an image from trash and S3.
+    """
+    image_service.permanently_delete_image(s3_client=s3_client, image_id=image_id, user=current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

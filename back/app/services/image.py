@@ -2,12 +2,14 @@
 import uuid
 import hashlib
 import logging
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from botocore.exceptions import ClientError
+from typing import List
 
 from app.repositories.image import ImageRepository
-from app.schemas.image import ImageUploadResponse, PresignedUrl, UploadCompleteResponse
+from app.schemas.image import ImageUploadResponse, PresignedUrl, UploadCompleteResponse, ImageResponse
 from app.models.user import User
 from config.config import settings
 
@@ -20,7 +22,7 @@ class ImageService:
     def request_upload_urls(
         self, *, s3_client, image_count: int, user: User
     ) -> ImageUploadResponse:
-        if not settings.S3_BUCKET_NAME in settings.S3_BUCKET_NAME:
+        if not settings.S3_BUCKET_NAME:
             raise HTTPException(status_code=500, detail="S3 bucket name is not configured.")
 
         presigned_urls = []
@@ -38,7 +40,7 @@ class ImageService:
                 presigned_urls.append(PresignedUrl(image_id=new_image.id, presigned_url=url))
             except ClientError as e:
                 logger.error(f"Error generating presigned URL: {e}")
-                self.repository.delete(new_image)
+                self.repository.delete_permanently(new_image)
                 raise HTTPException(status_code=500, detail="Could not generate upload URL.")
 
         return ImageUploadResponse(presigned_urls=presigned_urls)
@@ -46,12 +48,10 @@ class ImageService:
     def notify_upload_complete(
         self, *, s3_client, image_id: int, user: User
     ) -> UploadCompleteResponse:
-        image = self.repository.find_by_id(image_id)
+        image = self.repository.find_by_id(image_id, user.id)
 
         if not image:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
-        if image.user_id != user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not authorized.")
         if image.is_saved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image already processed.")
 
@@ -87,14 +87,55 @@ class ImageService:
                 detail="CloudFront domain is not configured."
             )
 
-        image = self.repository.find_by_id(image_id)
+        image = self.repository.find_by_id(image_id, user.id)
 
         if not image:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
-        if image.user_id != user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not authorized.")
 
         if not image.is_saved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image processing is not complete.")
 
         return f"https://{settings.CLOUDFRONT_DOMAIN}/{image.url}"
+
+    def soft_delete_image(self, *, image_id: int, user: User) -> None:
+        image = self.repository.find_by_id(image_id, user.id)
+        if not image:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+        
+        self.repository.update(image, deleted_at=datetime.now(timezone.utc))
+
+    def get_trashed_images(self, *, user: User) -> List[ImageResponse]:
+        images = self.repository.find_trashed_by_user(user.id)
+        return [ImageResponse.from_orm(img) for img in images]
+
+    def restore_image(self, *, image_id: int, user: User) -> ImageResponse:
+        image = self.repository.find_by_id_including_trashed(image_id, user.id)
+        if not image:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+        if image.deleted_at is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image is not in trash.")
+
+        self.repository.update(image, deleted_at=None)
+        return ImageResponse.from_orm(image)
+
+    def permanently_delete_image(self, *, s3_client, image_id: int, user: User) -> None:
+        image = self.repository.find_by_id_including_trashed(image_id, user.id)
+        if not image:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+        
+        if image.deleted_at is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image is not in trash. Soft delete it first.")
+
+        try:
+            s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=image.url)
+        except ClientError as e:
+            logger.error(f"Error deleting image from S3: {e}")
+            # Decide if you want to proceed with DB deletion even if S3 fails
+            # For now, we'll raise an error and stop.
+            raise HTTPException(status_code=500, detail="Could not delete image from cloud storage.")
+
+        self.repository.delete_permanently(image)
+
+    def get_all_images_by_user(self, *, user: User) -> List[ImageResponse]:
+        images = self.repository.find_all_by_user(user.id)
+        return [ImageResponse.from_orm(img) for img in images]
