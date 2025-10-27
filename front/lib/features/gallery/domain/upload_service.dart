@@ -1,26 +1,37 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'thumbnail_service.dart';
-import '../data/cache/photo_cache_service.dart';
 import '../data/repositories/local_photo_repository.dart';
 import '../data/models/photo_models.dart';
 
 final ImagePicker _imagePicker = ImagePicker();
 
 // Backend server configuration
-const String _baseUrl = 'https://your-backend-api.com'; // TODO: Replace with actual backend URL
-const String _uploadEndpoint = '/api/v1/upload';        // TODO: Replace with actual endpoint
-const String _thumbnailEndpoint = '/api/v1/upload/thumbnail'; // TODO: Replace with actual endpoint
-
-// Cache service instance
-final _cacheService = PhotoCacheService();
+const String _baseUrl = 'http://localhost:8000';
+const String _uploadRequestEndpoint = '/api/images/upload/request';
+const String _uploadCompleteEndpoint = '/api/images/upload/complete';
 
 // Local photo repository instance
 final _localRepo = LocalPhotoRepository();
+
+// TODO: 실제 인증 토큰을 가져오는 함수로 교체 필요
+String? _getAuthToken() {
+  // 임시로 null 반환. SharedPreferences나 secure storage에서 토큰 가져오기
+  return null;
+}
+
+Map<String, String> _getAuthHeaders() {
+  final token = _getAuthToken();
+  return {
+    'Content-Type': 'application/json',
+    if (token != null) 'Authorization': 'Bearer $token',
+  };
+}
 
 // Logging configuration
 enum LogLevel { debug, info, warning, error }
@@ -35,120 +46,112 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
   );
 }
 
-/// Uploads thumbnail to the backend server
-/// Returns the server response or null if upload fails
-Future<Map<String, dynamic>?> _uploadThumbnailToBackend(
-  List<int> thumbnailBytes,
-  String originalFileName,
-) async {
+/// Requests presigned URLs from the backend for uploading images
+/// Returns PresignedUrlResponse or throws an exception
+Future<PresignedUrlResponse> requestPresignedUrls(int imageCount) async {
   try {
-    final uri = Uri.parse('$_baseUrl$_thumbnailEndpoint');
-    final request = http.MultipartRequest('POST', uri);
+    final uri = Uri.parse('$_baseUrl$_uploadRequestEndpoint');
+    _log('Presigned URL 요청: $imageCount개의 이미지');
 
-    // Create thumbnail filename
-    final thumbnailFileName = 'thumb_$originalFileName';
-
-    final multipartFile = http.MultipartFile.fromBytes(
-      'thumbnail',
-      thumbnailBytes,
-      filename: thumbnailFileName,
+    final response = await http.post(
+      uri,
+      headers: _getAuthHeaders(),
+      body: jsonEncode({
+        'image_count': imageCount,
+      }),
     );
 
-    request.files.add(multipartFile);
-    request.fields['original_filename'] = originalFileName;
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final presignedResponse = PresignedUrlResponse.fromMap(data);
+      _log('Presigned URL 수신 성공: ${presignedResponse.presignedUrls.length}개');
+      return presignedResponse;
+    } else if (response.statusCode == 422) {
+      // Validation error
+      final errorData = jsonDecode(response.body);
+      final details = (errorData['detail'] as List<dynamic>?)
+          ?.map((e) => ValidationErrorDetail.fromMap(e as Map<String, dynamic>))
+          .toList() ?? [];
 
-    _log('썸네일 업로드 중: $thumbnailFileName (${thumbnailBytes.length} bytes)');
-
-    final response = await request.send();
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final responseBody = await response.stream.bytesToString();
-      _log('썸네일 업로드 성공: $responseBody', level: LogLevel.info);
-      return {'success': true, 'data': responseBody};
+      final errorMessages = details.map((d) => '${d.loc.join(".")}: ${d.msg}').join(', ');
+      _log('Presigned URL 요청 검증 오류: $errorMessages', level: LogLevel.error);
+      throw Exception('검증 오류: $errorMessages');
     } else {
-      _log('썸네일 업로드 실패 (status: ${response.statusCode})', level: LogLevel.warning);
-      return {'success': false, 'error': 'Status ${response.statusCode}'};
+      _log('Presigned URL 요청 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      throw Exception('Presigned URL 요청 실패: ${response.statusCode}');
     }
   } catch (e) {
-    _log('썸네일 업로드 오류: $e', level: LogLevel.error, error: e);
-    return {'success': false, 'error': e.toString()};
+    _log('Presigned URL 요청 오류: $e', level: LogLevel.error, error: e);
+    rethrow;
   }
 }
 
-/// Uploads a file to the backend server using stream
-/// Also generates and uploads thumbnail, and caches it locally
-/// Returns the server response or null if upload fails
-Future<Map<String, dynamic>?> uploadFileToBackend(File file, {String? fileName}) async {
+/// Uploads file directly to presigned URL (e.g., S3)
+/// Returns true if upload succeeds, false otherwise
+Future<bool> uploadToPresignedUrl(
+  File file,
+  String presignedUrl, {
+  String? contentType,
+}) async {
   try {
-    final uri = Uri.parse('$_baseUrl$_uploadEndpoint');
-    final request = http.MultipartRequest('POST', uri);
+    final fileBytes = await file.readAsBytes();
+    _log('Presigned URL로 파일 업로드 중: ${path.basename(file.path)} (${fileBytes.length} bytes)');
 
-    // Use file stream instead of loading entire file into memory
-    final stream = http.ByteStream(file.openRead());
-    final length = await file.length();
-    final fileNameToUse = fileName ?? path.basename(file.path);
-
-    final multipartFile = http.MultipartFile(
-      'file',
-      stream,
-      length,
-      filename: fileNameToUse,
+    final response = await http.put(
+      Uri.parse(presignedUrl),
+      headers: {
+        'Content-Type': contentType ?? 'application/octet-stream',
+        'Content-Length': fileBytes.length.toString(),
+      },
+      body: fileBytes,
     );
 
-    request.files.add(multipartFile);
-
-    // Add additional headers if needed
-    // request.headers['Authorization'] = 'Bearer YOUR_TOKEN';
-
-    _log('파일 업로드 중: $fileNameToUse ($length bytes)');
-
-    final response = await request.send();
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final responseBody = await response.stream.bytesToString();
-      _log('파일 업로드 성공: $responseBody', level: LogLevel.info);
-
-      // Generate thumbnail after successful upload
-      try {
-        _log('썸네일 생성 시작: ${file.path}');
-        final thumbnailBytes = await ThumbnailService.generateThumbnail(file);
-
-        if (thumbnailBytes != null) {
-          _log('썸네일 생성 성공: ${thumbnailBytes.length} bytes');
-
-          // Cache thumbnail locally
-          final cachedFile = await _cacheService.cacheThumbnailByFilePath(
-            file.path,
-            thumbnailBytes,
-          );
-
-          if (cachedFile != null) {
-            _log('썸네일 로컬 캐시 저장 완료: ${cachedFile.path}');
-          }
-
-          // Upload thumbnail to backend
-          final thumbnailUploadResult = await _uploadThumbnailToBackend(
-            thumbnailBytes,
-            fileNameToUse,
-          );
-
-          if (thumbnailUploadResult != null && thumbnailUploadResult['success'] == true) {
-            _log('썸네일 백엔드 업로드 완료');
-          } else {
-            _log('썸네일 백엔드 업로드 실패 (원본 파일은 업로드됨)', level: LogLevel.warning);
-          }
-        } else {
-          _log('썸네일 생성 실패 (원본 파일은 업로드됨)', level: LogLevel.warning);
-        }
-      } catch (thumbnailError) {
-        _log('썸네일 처리 중 오류 (원본 파일은 업로드됨): $thumbnailError',
-            level: LogLevel.warning, error: thumbnailError);
-      }
-
-      return {'success': true, 'data': responseBody};
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      _log('Presigned URL 업로드 성공: ${path.basename(file.path)}');
+      return true;
     } else {
-      _log('파일 업로드 실패 (status: ${response.statusCode})', level: LogLevel.warning);
-      return {'success': false, 'error': 'Status ${response.statusCode}'};
+      _log('Presigned URL 업로드 실패 (status: ${response.statusCode})', level: LogLevel.warning);
+      return false;
+    }
+  } catch (e) {
+    _log('Presigned URL 업로드 오류: $e', level: LogLevel.error, error: e);
+    return false;
+  }
+}
+
+/// Uploads a single file using presigned URL flow
+/// 1. Request presigned URL from backend
+/// 2. Upload file to presigned URL (S3)
+/// Returns map with success status and image_id
+Future<Map<String, dynamic>?> uploadFileWithPresignedUrl(
+  File file, {
+  String? contentType,
+}) async {
+  try {
+    // 1. Request presigned URL
+    final presignedResponse = await requestPresignedUrls(1);
+
+    if (presignedResponse.presignedUrls.isEmpty) {
+      _log('Presigned URL을 받지 못했습니다', level: LogLevel.error);
+      return {'success': false, 'error': 'No presigned URL received'};
+    }
+
+    final presignedData = presignedResponse.presignedUrls.first;
+
+    // 2. Upload to presigned URL
+    final uploadSuccess = await uploadToPresignedUrl(
+      file,
+      presignedData.presignedUrl,
+      contentType: contentType,
+    );
+
+    if (uploadSuccess) {
+      return {
+        'success': true,
+        'imageId': presignedData.imageId,
+      };
+    } else {
+      return {'success': false, 'error': 'Upload to presigned URL failed'};
     }
   } catch (e) {
     _log('파일 업로드 오류: $e', level: LogLevel.error, error: e);
@@ -156,41 +159,87 @@ Future<Map<String, dynamic>?> uploadFileToBackend(File file, {String? fileName})
   }
 }
 
-/// Uploads a file from read stream (for platforms where file path is not available)
-Future<Map<String, dynamic>?> uploadFileStreamToBackend(
-  Stream<List<int>> readStream,
-  int fileSize,
-  String fileName,
-) async {
-  try {
-    final uri = Uri.parse('$_baseUrl$_uploadEndpoint');
-    final request = http.MultipartRequest('POST', uri);
+/// Uploads multiple files using presigned URLs in batch
+/// Returns list of upload results with image_id for each file
+Future<List<Map<String, dynamic>>> uploadMultipleFilesWithPresignedUrls(
+  List<File> files, {
+  String? contentType,
+  Function(int current, int total)? onProgress,
+}) async {
+  final results = <Map<String, dynamic>>[];
 
-    final stream = http.ByteStream(readStream);
-    final multipartFile = http.MultipartFile(
-      'file',
-      stream,
-      fileSize,
-      filename: fileName,
+  try {
+    // 1. Request presigned URLs for all files
+    final presignedResponse = await requestPresignedUrls(files.length);
+
+    if (presignedResponse.presignedUrls.length != files.length) {
+      _log('요청한 URL 개수와 받은 URL 개수가 다릅니다', level: LogLevel.warning);
+    }
+
+    // 2. Upload each file to its presigned URL
+    for (var i = 0; i < files.length && i < presignedResponse.presignedUrls.length; i++) {
+      final file = files[i];
+      final presignedData = presignedResponse.presignedUrls[i];
+
+      final uploadSuccess = await uploadToPresignedUrl(
+        file,
+        presignedData.presignedUrl,
+        contentType: contentType,
+      );
+
+      results.add({
+        'fileName': path.basename(file.path),
+        'success': uploadSuccess,
+        'imageId': presignedData.imageId,
+      });
+
+      onProgress?.call(i + 1, files.length);
+    }
+
+    return results;
+  } catch (e) {
+    _log('일괄 업로드 오류: $e', level: LogLevel.error, error: e);
+    return results;
+  }
+}
+
+/// Notifies backend that upload is complete for a specific image
+/// Returns UploadCompleteResponse or throws an exception
+Future<UploadCompleteResponse> notifyUploadComplete(int imageId) async {
+  try {
+    final uri = Uri.parse('$_baseUrl$_uploadCompleteEndpoint');
+    _log('업로드 완료 알림: image_id=$imageId');
+
+    final response = await http.post(
+      uri,
+      headers: _getAuthHeaders(),
+      body: jsonEncode({
+        'image_id': imageId,
+      }),
     );
 
-    request.files.add(multipartFile);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final completeResponse = UploadCompleteResponse.fromMap(data);
+      _log('업로드 완료 확인: image_id=${completeResponse.imageId}, status=${completeResponse.status}');
+      return completeResponse;
+    } else if (response.statusCode == 422) {
+      // Validation error
+      final errorData = jsonDecode(response.body);
+      final details = (errorData['detail'] as List<dynamic>?)
+          ?.map((e) => ValidationErrorDetail.fromMap(e as Map<String, dynamic>))
+          .toList() ?? [];
 
-    _log('Uploading file stream: $fileName ($fileSize bytes)');
-
-    final response = await request.send();
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final responseBody = await response.stream.bytesToString();
-      _log('Upload successful: $responseBody', level: LogLevel.info);
-      return {'success': true, 'data': responseBody};
+      final errorMessages = details.map((d) => '${d.loc.join(".")}: ${d.msg}').join(', ');
+      _log('업로드 완료 알림 검증 오류: $errorMessages', level: LogLevel.error);
+      throw Exception('검증 오류: $errorMessages');
     } else {
-      _log('Upload failed with status: ${response.statusCode}', level: LogLevel.warning);
-      return {'success': false, 'error': 'Status ${response.statusCode}'};
+      _log('업로드 완료 알림 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      throw Exception('업로드 완료 알림 실패: ${response.statusCode}');
     }
   } catch (e) {
-    _log('Upload error: $e', level: LogLevel.error, error: e);
-    return {'success': false, 'error': e.toString()};
+    _log('업로드 완료 알림 오류: $e', level: LogLevel.error, error: e);
+    rethrow;
   }
 }
 
@@ -245,23 +294,11 @@ Future<Map<String, dynamic>> pickFile({
     int failedCount = 0;
     final failedFiles = <String>[];
 
-    // Upload stream files individually (for web platform)
-    for (final streamFile in streamFiles) {
-      try {
-        final uploadResult = await uploadFileStreamToBackend(
-          streamFile['stream'] as Stream<List<int>>,
-          streamFile['size'] as int,
-          streamFile['name'] as String,
-        );
-        if (uploadResult != null && uploadResult['success'] == true) {
-          results.add(uploadResult);
-          successCount++;
-        } else {
-          failedFiles.add(streamFile['name'] as String);
-          failedCount++;
-        }
-      } catch (e) {
-        _log('스트림 파일 업로드 실패: ${streamFile['name']}', level: LogLevel.error, error: e);
+    // Note: Stream files (web platform) are not yet supported with presigned URL flow
+    // TODO: Implement stream-based upload for web platform
+    if (streamFiles.isNotEmpty) {
+      _log('스트림 파일 ${streamFiles.length}개는 현재 지원되지 않습니다 (웹 플랫폼)', level: LogLevel.warning);
+      for (final streamFile in streamFiles) {
         failedFiles.add(streamFile['name'] as String);
         failedCount++;
       }
@@ -452,49 +489,41 @@ Future<List<Photo>> uploadAndSaveFiles(
 }
 
 /// 백엔드로 비동기 업로드 (UI 블로킹 없음)
+/// Uses the new presigned URL flow:
+/// 1. Request presigned URL
+/// 2. Upload to presigned URL
+/// 3. Notify backend upload complete
+///
+/// Note: 썸네일은 로컬에만 저장되며 서버에 업로드되지 않습니다
 Future<void> _uploadToBackendAsync(Photo photo, File file, List<int>? thumbnailBytes) async {
   try {
     // 업로드 상태 변경
     await _localRepo.updateUploadStatus(photo.id, UploadStatus.uploading);
 
-    // 원본 파일 업로드
-    final uploadResult = await uploadFileToBackend(file);
+    // 1. Request presigned URL and upload file (원본 이미지만 업로드)
+    final uploadResult = await uploadFileWithPresignedUrl(file);
 
     if (uploadResult != null && uploadResult['success'] == true) {
-      // 썸네일 업로드
-      String? thumbnailUrl;
-      if (thumbnailBytes != null) {
-        final thumbnailResult = await _uploadThumbnailToBackend(
-          thumbnailBytes,
-          photo.fileName ?? 'unknown',
-        );
-        // TODO: 백엔드 응답에서 썸네일 URL 추출
-        // thumbnailUrl = thumbnailResult?['thumbnailUrl'];
-      }
+      final imageId = uploadResult['imageId'] as int;
 
-      // TODO: 백엔드 응답에서 원본 이미지 URL 추출
-      // 실제 구현 시 백엔드 응답 형식에 맞게 수정 필요
-      final remoteUrl = uploadResult['data'] != null
-          ? '$_baseUrl/images/${photo.id}' // 임시 URL 생성
-          : null;
+      // 2. Notify backend that upload is complete
+      try {
+        final completeResponse = await notifyUploadComplete(imageId);
 
-      // 백엔드에서 받은 URL로 로컬 저장소 업데이트
-      if (remoteUrl != null) {
+        // 3. Update local repository with backend data
+        final remoteUrl = '$_baseUrl/api/images/$imageId/view'; // View URL endpoint
         await _localRepo.updatePhotoFromBackend(
           photoId: photo.id,
           remoteUrl: remoteUrl,
-          thumbnailUrl: thumbnailUrl,
         );
-        _log('백엔드 URL 업데이트 완료: ${photo.id} -> $remoteUrl');
+
+        _log('백엔드 업로드 완료: ${photo.id} -> imageId=$imageId, hash=${completeResponse.hash}');
+        await _localRepo.updateUploadStatus(photo.id, UploadStatus.completed);
+      } catch (completeError) {
+        _log('업로드 완료 알림 실패: ${photo.id} - $completeError', level: LogLevel.warning, error: completeError);
+        // Upload succeeded but notification failed - still mark as completed
+        await _localRepo.updateUploadStatus(photo.id, UploadStatus.completed);
       }
-
-      _log('백엔드 업로드 완료: ${photo.id}');
-
-      // TODO: 백엔드에서 AI 메타데이터를 받아와서 업데이트
-      // final metadata = await fetchMetadataFromBackend(photo.id);
-      // if (metadata != null) {
-      //   await _localRepo.updatePhotoMetadata(photo.id, metadata);
-      // }
     } else {
       await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
       _log('백엔드 업로드 실패: ${photo.id}', level: LogLevel.error);
@@ -503,50 +532,4 @@ Future<void> _uploadToBackendAsync(Photo photo, File file, List<int>? thumbnailB
     await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
     _log('백엔드 업로드 오류: ${photo.id} - $e', level: LogLevel.error, error: e);
   }
-}
-
-/// Uploads multiple files in bulk with optional progress callback
-/// Returns a summary of the upload operation
-Future<Map<String, dynamic>> uploadMultipleFiles(
-  List<File> files, {
-  Function(int current, int total)? onProgress,
-}) async {
-  final uploadResults = <Map<String, dynamic>>[];
-  final failedFiles = <String>[];
-  int successCount = 0;
-
-  _log('일괄 업로드 시작: ${files.length}개의 파일');
-
-  for (var i = 0; i < files.length; i++) {
-    final file = files[i];
-    try {
-      final uploadResult = await uploadFileToBackend(file);
-
-      if (uploadResult != null && uploadResult['success'] == true) {
-        uploadResults.add(uploadResult);
-        successCount++;
-      } else {
-        failedFiles.add(path.basename(file.path));
-      }
-
-      // Call progress callback if provided
-      onProgress?.call(i + 1, files.length);
-    } catch (e) {
-      _log('파일 업로드 실패: ${file.path}', level: LogLevel.error, error: e);
-      failedFiles.add(path.basename(file.path));
-    }
-  }
-
-  final summary = {
-    'success': true,
-    'totalFiles': files.length,
-    'successCount': successCount,
-    'failedCount': failedFiles.length,
-    'failedFiles': failedFiles,
-    'results': uploadResults,
-  };
-
-  _log('일괄 업로드 완료: $successCount/${files.length} 성공');
-
-  return summary;
 }

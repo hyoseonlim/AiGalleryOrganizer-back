@@ -77,7 +77,6 @@ class LocalPhotoRepository {
         id: photoId,
         url: photoId, // 임시 ID, remoteUrl이 설정되면 그걸 사용
         remoteUrl: null, // 백엔드 업로드 후 설정
-        thumbnailUrl: null, // 백엔드 업로드 후 설정
         fileName: fileName,
         createdAt: DateTime.now(),
         fileSize: fileSize,
@@ -107,7 +106,6 @@ class LocalPhotoRepository {
   Future<void> updatePhotoFromBackend({
     required String photoId,
     required String remoteUrl,
-    String? thumbnailUrl,
     PhotoMetadata? metadata,
   }) async {
     try {
@@ -116,7 +114,6 @@ class LocalPhotoRepository {
         final updatedPhoto = photo.copyWith(
           url: remoteUrl,
           remoteUrl: remoteUrl,
-          thumbnailUrl: thumbnailUrl,
           metadata: metadata ?? photo.metadata,
           uploadStatus: UploadStatus.completed,
         );

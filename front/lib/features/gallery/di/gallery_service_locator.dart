@@ -1,7 +1,7 @@
 import '../domain/photo_detail_state_service.dart';
 import '../domain/photo_selection_service.dart';
 import '../domain/upload_state_service.dart';
-import '../domain/delete_state_service.dart';
+import '../domain/trash_state_service.dart';
 import '../domain/download_state_service.dart';
 
 /// Simple service locator for gallery feature services
@@ -19,7 +19,7 @@ class GalleryServiceLocator {
   PhotoDetailStateService? _photoDetailStateService;
   PhotoSelectionService? _photoSelectionService;
   UploadStateService? _uploadStateService;
-  DeleteStateService? _deleteStateService;
+  TrashStateService? _trashStateService;
   DownloadStateService? _downloadStateService;
 
   /// Gets or creates the PhotoDetailStateService singleton
@@ -40,10 +40,10 @@ class GalleryServiceLocator {
     return _uploadStateService!;
   }
 
-  /// Gets or creates the DeleteStateService singleton
-  DeleteStateService get deleteStateService {
-    _deleteStateService ??= DeleteStateService();
-    return _deleteStateService!;
+  /// Gets or creates the TrashStateService singleton
+  TrashStateService get trashStateService {
+    _trashStateService ??= TrashStateService();
+    return _trashStateService!;
   }
 
   /// Gets or creates the DownloadStateService singleton
@@ -57,13 +57,13 @@ class GalleryServiceLocator {
     _photoDetailStateService?.dispose();
     _photoSelectionService?.dispose();
     _uploadStateService?.dispose();
-    _deleteStateService?.dispose();
+    _trashStateService?.dispose();
     _downloadStateService?.dispose();
 
     _photoDetailStateService = null;
     _photoSelectionService = null;
     _uploadStateService = null;
-    _deleteStateService = null;
+    _trashStateService = null;
     _downloadStateService = null;
   }
 
@@ -78,9 +78,9 @@ class GalleryServiceLocator {
     } else if (T == UploadStateService) {
       _uploadStateService?.dispose();
       _uploadStateService = null;
-    } else if (T == DeleteStateService) {
-      _deleteStateService?.dispose();
-      _deleteStateService = null;
+    } else if (T == TrashStateService) {
+      _trashStateService?.dispose();
+      _trashStateService = null;
     } else if (T == DownloadStateService) {
       _downloadStateService?.dispose();
       _downloadStateService = null;

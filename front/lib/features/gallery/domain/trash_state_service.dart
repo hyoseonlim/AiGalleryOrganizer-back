@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// Manages the state of file delete operations
-class DeleteStateService extends ChangeNotifier {
+/// Manages the state of trash operations (soft delete, restore, permanent delete)
+class TrashStateService extends ChangeNotifier {
   bool _isDeleting = false;
   int _deleteCurrent = 0;
   int _deleteTotal = 0;

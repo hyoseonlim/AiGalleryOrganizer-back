@@ -139,7 +139,6 @@ class Photo {
   final String id;
   final String url; // 로컬 경로 또는 원격 URL
   final String? remoteUrl; // 백엔드 원본 이미지 URL
-  final String? thumbnailUrl; // 백엔드 썸네일 URL
   final String? fileName;
   final DateTime? createdAt;
   final int? fileSize;
@@ -150,7 +149,6 @@ class Photo {
     required this.id,
     required this.url,
     this.remoteUrl,
-    this.thumbnailUrl,
     this.fileName,
     this.createdAt,
     this.fileSize,
@@ -163,7 +161,6 @@ class Photo {
     String? id,
     String? url,
     String? remoteUrl,
-    String? thumbnailUrl,
     String? fileName,
     DateTime? createdAt,
     int? fileSize,
@@ -174,7 +171,6 @@ class Photo {
       id: id ?? this.id,
       url: url ?? this.url,
       remoteUrl: remoteUrl ?? this.remoteUrl,
-      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       fileName: fileName ?? this.fileName,
       createdAt: createdAt ?? this.createdAt,
       fileSize: fileSize ?? this.fileSize,
@@ -188,7 +184,6 @@ class Photo {
       id: map['id'] ?? '',
       url: map['url'] ?? '',
       remoteUrl: map['remoteUrl'],
-      thumbnailUrl: map['thumbnailUrl'],
       fileName: map['fileName'],
       createdAt: map['createdAt'] != null
           ? DateTime.parse(map['createdAt'])
@@ -209,7 +204,6 @@ class Photo {
       'id': id,
       'url': url,
       'remoteUrl': remoteUrl,
-      'thumbnailUrl': thumbnailUrl,
       'fileName': fileName,
       'createdAt': createdAt?.toIso8601String(),
       'fileSize': fileSize,
@@ -301,4 +295,267 @@ class UploadResult {
   @override
   String toString() =>
       'UploadResult(success: $success, totalFiles: $totalFiles, successCount: $successCount, failedCount: $failedCount, cancelled: $cancelled)';
+}
+
+/// Represents a presigned URL for uploading an image
+class PresignedUrlData {
+  final int imageId;
+  final String presignedUrl;
+
+  const PresignedUrlData({
+    required this.imageId,
+    required this.presignedUrl,
+  });
+
+  factory PresignedUrlData.fromMap(Map<String, dynamic> map) {
+    return PresignedUrlData(
+      imageId: map['image_id'] ?? 0,
+      presignedUrl: map['presigned_url'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'image_id': imageId,
+      'presigned_url': presignedUrl,
+    };
+  }
+
+  @override
+  String toString() => 'PresignedUrlData(imageId: $imageId, presignedUrl: $presignedUrl)';
+}
+
+/// Represents the response from presigned URL request
+class PresignedUrlResponse {
+  final List<PresignedUrlData> presignedUrls;
+
+  const PresignedUrlResponse({
+    required this.presignedUrls,
+  });
+
+  factory PresignedUrlResponse.fromMap(Map<String, dynamic> map) {
+    final urls = (map['presigned_urls'] as List<dynamic>?)
+        ?.map((item) => PresignedUrlData.fromMap(item as Map<String, dynamic>))
+        .toList() ?? [];
+
+    return PresignedUrlResponse(
+      presignedUrls: urls,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'presigned_urls': presignedUrls.map((url) => url.toMap()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'PresignedUrlResponse(presignedUrls: ${presignedUrls.length})';
+}
+
+/// Represents a validation error detail from API
+class ValidationErrorDetail {
+  final List<dynamic> loc;
+  final String msg;
+  final String type;
+
+  const ValidationErrorDetail({
+    required this.loc,
+    required this.msg,
+    required this.type,
+  });
+
+  factory ValidationErrorDetail.fromMap(Map<String, dynamic> map) {
+    return ValidationErrorDetail(
+      loc: List<dynamic>.from(map['loc'] ?? []),
+      msg: map['msg'] ?? '',
+      type: map['type'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'loc': loc,
+      'msg': msg,
+      'type': type,
+    };
+  }
+
+  @override
+  String toString() => 'ValidationErrorDetail(loc: $loc, msg: $msg, type: $type)';
+}
+
+/// Represents the response from upload/complete endpoint
+class UploadCompleteResponse {
+  final int imageId;
+  final String status;
+  final String hash;
+
+  const UploadCompleteResponse({
+    required this.imageId,
+    required this.status,
+    required this.hash,
+  });
+
+  factory UploadCompleteResponse.fromMap(Map<String, dynamic> map) {
+    return UploadCompleteResponse(
+      imageId: map['image_id'] ?? 0,
+      status: map['status'] ?? '',
+      hash: map['hash'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'image_id': imageId,
+      'status': status,
+      'hash': hash,
+    };
+  }
+
+  @override
+  String toString() => 'UploadCompleteResponse(imageId: $imageId, status: $status, hash: $hash)';
+}
+
+/// AI 처리 상태
+enum AIProcessingStatus {
+  pending,
+  processing,
+  completed,
+  failed;
+
+  factory AIProcessingStatus.fromString(String value) {
+    return AIProcessingStatus.values.firstWhere(
+      (e) => e.name.toUpperCase() == value.toUpperCase(),
+      orElse: () => AIProcessingStatus.pending,
+    );
+  }
+
+  String toApiString() => name.toUpperCase();
+}
+
+/// 백엔드 API 이미지 응답 모델
+class ImageResponse {
+  final int id;
+  final int userId;
+  final String s3Key;
+  final String hash;
+  final int fileSize;
+  final AIProcessingStatus status;
+  final DateTime uploadedAt;
+  final DateTime? deletedAt;
+  final String? aiDescription;
+  final List<String> aiTags;
+  final Map<String, dynamic>? metadata;
+
+  const ImageResponse({
+    required this.id,
+    required this.userId,
+    required this.s3Key,
+    required this.hash,
+    required this.fileSize,
+    required this.status,
+    required this.uploadedAt,
+    this.deletedAt,
+    this.aiDescription,
+    this.aiTags = const [],
+    this.metadata,
+  });
+
+  factory ImageResponse.fromMap(Map<String, dynamic> map) {
+    return ImageResponse(
+      id: map['id'] ?? 0,
+      userId: map['user_id'] ?? 0,
+      s3Key: map['s3_key'] ?? '',
+      hash: map['hash'] ?? '',
+      fileSize: map['file_size'] ?? 0,
+      status: AIProcessingStatus.fromString(map['status'] ?? 'PENDING'),
+      uploadedAt: DateTime.parse(map['uploaded_at']),
+      deletedAt: map['deleted_at'] != null ? DateTime.parse(map['deleted_at']) : null,
+      aiDescription: map['ai_description'],
+      aiTags: List<String>.from(map['ai_tags'] ?? []),
+      metadata: map['metadata'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'user_id': userId,
+      's3_key': s3Key,
+      'hash': hash,
+      'file_size': fileSize,
+      'status': status.toApiString(),
+      'uploaded_at': uploadedAt.toIso8601String(),
+      'deleted_at': deletedAt?.toIso8601String(),
+      'ai_description': aiDescription,
+      'ai_tags': aiTags,
+      'metadata': metadata,
+    };
+  }
+
+  /// ImageResponse를 Photo로 변환
+  Photo toPhoto({String? viewUrl, String? localThumbnailPath}) {
+    return Photo(
+      id: id.toString(),
+      url: localThumbnailPath ?? viewUrl ?? '',
+      remoteUrl: viewUrl,
+      fileName: s3Key.split('/').last,
+      createdAt: uploadedAt,
+      fileSize: fileSize,
+      metadata: PhotoMetadata(
+        systemTags: aiTags.map((tag) => PhotoTag(
+          id: tag,
+          name: tag,
+          type: TagType.system,
+        )).toList(),
+        additionalInfo: metadata,
+      ),
+      uploadStatus: _mapAIStatusToUploadStatus(status),
+    );
+  }
+
+  static UploadStatus _mapAIStatusToUploadStatus(AIProcessingStatus status) {
+    switch (status) {
+      case AIProcessingStatus.pending:
+        return UploadStatus.pending;
+      case AIProcessingStatus.processing:
+        return UploadStatus.uploading;
+      case AIProcessingStatus.completed:
+        return UploadStatus.completed;
+      case AIProcessingStatus.failed:
+        return UploadStatus.failed;
+    }
+  }
+
+  @override
+  String toString() => 'ImageResponse(id: $id, s3Key: $s3Key, status: $status)';
+}
+
+/// 이미지 view URL 응답
+class ImageViewableResponse {
+  final String url;
+  final DateTime expiresAt;
+
+  const ImageViewableResponse({
+    required this.url,
+    required this.expiresAt,
+  });
+
+  factory ImageViewableResponse.fromMap(Map<String, dynamic> map) {
+    return ImageViewableResponse(
+      url: map['url'] ?? '',
+      expiresAt: DateTime.parse(map['expires_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'url': url,
+      'expires_at': expiresAt.toIso8601String(),
+    };
+  }
+
+  @override
+  String toString() => 'ImageViewableResponse(url: $url, expiresAt: $expiresAt)';
 }
