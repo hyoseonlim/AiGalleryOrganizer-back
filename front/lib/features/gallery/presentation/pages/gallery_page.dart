@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:front/features/gallery/domain/gallery_domain.dart';
+import 'package:front/features/gallery/domain/upload_service.dart';
+import 'package:front/features/gallery/domain/upload_state_service.dart';
+import 'package:front/features/gallery/domain/photo_selection_service.dart';
+import 'package:front/features/gallery/data/models/photo_models.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 
 class GalleryPage extends StatefulWidget {
@@ -17,88 +20,59 @@ class _GalleryPageState extends State<GalleryPage> {
     '2025년 1월 12일': 5,
   };
 
-  bool _isMultiSelectMode = false;
-  final Set<String> _selectedPhotos = {}; // Using a unique ID for each photo
+  // Domain services
+  late final UploadStateService _uploadStateService;
+  late final PhotoSelectionService _photoSelectionService;
 
-  // Upload progress state
-  bool _isUploading = false;
-  int _uploadCurrent = 0;
-  int _uploadTotal = 0;
+  @override
+  void initState() {
+    super.initState();
+    _uploadStateService = UploadStateService();
+    _photoSelectionService = PhotoSelectionService();
 
-  void _toggleMultiSelectMode() {
-    setState(() {
-      _isMultiSelectMode = !_isMultiSelectMode;
-      if (!_isMultiSelectMode) {
-        _selectedPhotos.clear();
-      }
-    });
+    // Listen to service changes and rebuild UI
+    _uploadStateService.addListener(_onUploadStateChanged);
+    _photoSelectionService.addListener(_onSelectionStateChanged);
   }
 
-  void _updateUploadProgress(int current, int total) {
-    setState(() {
-      _uploadCurrent = current;
-      _uploadTotal = total;
-      _isUploading = current < total;
-    });
+  @override
+  void dispose() {
+    _uploadStateService.removeListener(_onUploadStateChanged);
+    _photoSelectionService.removeListener(_onSelectionStateChanged);
+    _uploadStateService.dispose();
+    _photoSelectionService.dispose();
+    super.dispose();
   }
 
-  void _startUpload() {
-    setState(() {
-      _isUploading = true;
-      _uploadCurrent = 0;
-      _uploadTotal = 0;
-    });
+  void _onUploadStateChanged() {
+    setState(() {});
   }
 
-  void _finishUpload() {
-    setState(() {
-      _isUploading = false;
-      _uploadCurrent = 0;
-      _uploadTotal = 0;
-    });
-  }
-
-  void _onPhotoTap(String photoId) {
-    if (_isMultiSelectMode) {
-      setState(() {
-        if (_selectedPhotos.contains(photoId)) {
-          _selectedPhotos.remove(photoId);
-        } else {
-          _selectedPhotos.add(photoId);
-        }
-      });
-    }
-  }
-
-  void _onPhotoLongPress(String photoId) {
-    if (!_isMultiSelectMode) {
-      _toggleMultiSelectMode();
-      _onPhotoTap(photoId);
-    }
+  void _onSelectionStateChanged() {
+    setState(() {});
   }
 
   Future<void> _handlePickFile() async {
-    _startUpload();
+    _uploadStateService.startUpload();
     try {
       final result = await pickFile(
         onProgress: (current, total) {
-          _updateUploadProgress(current, total);
+          _uploadStateService.updateProgress(current, total);
         },
       );
 
-      _finishUpload();
+      _uploadStateService.finishUpload();
 
-      if (result['success'] == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${result['successCount']}/${result['totalFiles']} 파일 업로드 완료'),
-            ),
-          );
-        }
+      final uploadResult = UploadResult.fromMap(result);
+      if (uploadResult.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 업로드 완료'),
+          ),
+        );
       }
     } catch (e) {
-      _finishUpload();
+      _uploadStateService.finishUpload();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -111,27 +85,26 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   Future<void> _handlePickFolder() async {
-    _startUpload();
+    _uploadStateService.startUpload();
     try {
       final result = await pickFolder(
         onProgress: (current, total) {
-          _updateUploadProgress(current, total);
+          _uploadStateService.updateProgress(current, total);
         },
       );
 
-      _finishUpload();
+      _uploadStateService.finishUpload();
 
-      if (result['success'] == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${result['successCount']}/${result['totalFiles']} 파일 업로드 완료'),
-            ),
-          );
-        }
+      final uploadResult = UploadResult.fromMap(result);
+      if (uploadResult.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 업로드 완료'),
+          ),
+        );
       }
     } catch (e) {
-      _finishUpload();
+      _uploadStateService.finishUpload();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -144,27 +117,26 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   Future<void> _handleOpenGallery() async {
-    _startUpload();
+    _uploadStateService.startUpload();
     try {
       final result = await openGallery(
         onProgress: (current, total) {
-          _updateUploadProgress(current, total);
+          _uploadStateService.updateProgress(current, total);
         },
       );
 
-      _finishUpload();
+      _uploadStateService.finishUpload();
 
-      if (result['success'] == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${result['successCount']}/${result['totalFiles']} 이미지 업로드 완료'),
-            ),
-          );
-        }
+      final uploadResult = UploadResult.fromMap(result);
+      if (uploadResult.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 이미지 업로드 완료'),
+          ),
+        );
       }
     } catch (e) {
-      _finishUpload();
+      _uploadStateService.finishUpload();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -190,27 +162,27 @@ class _GalleryPageState extends State<GalleryPage> {
               return _DateSection(
                 date: date,
                 imageCount: imageCount,
-                selectedPhotos: _selectedPhotos,
-                isMultiSelectMode: _isMultiSelectMode,
-                onPhotoTap: _onPhotoTap,
-                onPhotoLongPress: _onPhotoLongPress,
+                selectedPhotos: _photoSelectionService.selectedPhotos,
+                isMultiSelectMode: _photoSelectionService.isMultiSelectMode,
+                onPhotoTap: _photoSelectionService.onPhotoTap,
+                onPhotoLongPress: _photoSelectionService.onPhotoLongPress,
               );
             },
           ),
           // Upload progress indicator on the left side
-          if (_isUploading)
+          if (_uploadStateService.isUploading)
             Positioned(
               left: 16,
               bottom: 16,
               child: _UploadProgressIndicator(
-                current: _uploadCurrent,
-                total: _uploadTotal,
+                current: _uploadStateService.uploadCurrent,
+                total: _uploadStateService.uploadTotal,
               ),
             ),
         ],
       ),
       floatingActionButtonLocation: ExpandableFab.location,
-      floatingActionButton: _isMultiSelectMode
+      floatingActionButton: _photoSelectionService.isMultiSelectMode
       ? null
       : ExpandableFab(
         openButtonBuilder: RotateFloatingActionButtonBuilder(
@@ -250,13 +222,13 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   AppBar _buildAppBar() {
-    if (_isMultiSelectMode) {
+    if (_photoSelectionService.isMultiSelectMode) {
       return AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: _toggleMultiSelectMode,
+          onPressed: _photoSelectionService.toggleMultiSelectMode,
         ),
-        title: Text('${_selectedPhotos.length}개 선택'),
+        title: Text('${_photoSelectionService.selectedCount}개 선택'),
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
@@ -280,7 +252,7 @@ class _GalleryPageState extends State<GalleryPage> {
         PopupMenuButton<String>(
           onSelected: (value) {
             if (value == 'select') {
-              _toggleMultiSelectMode();
+              _photoSelectionService.toggleMultiSelectMode();
             }
             // TODO: Handle other options like sort
           },
