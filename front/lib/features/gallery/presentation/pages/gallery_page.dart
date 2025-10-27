@@ -3,7 +3,10 @@ import 'package:front/features/gallery/domain/upload_service.dart';
 import 'package:front/features/gallery/domain/upload_state_service.dart';
 import 'package:front/features/gallery/domain/photo_selection_service.dart';
 import 'package:front/features/gallery/data/models/photo_models.dart';
+import 'package:front/features/gallery/data/repositories/local_photo_repository.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
+import 'dart:io';
+import 'photo_detail_page.dart';
 
 class GalleryPage extends StatefulWidget {
   const GalleryPage({super.key});
@@ -13,16 +16,19 @@ class GalleryPage extends StatefulWidget {
 }
 
 class _GalleryPageState extends State<GalleryPage> {
-  // Mock data for photos, grouped by date
-  final Map<String, int> _photoSections = {
-    '2025년 1월 15일': 3,
-    '2025년 1월 14일': 6,
-    '2025년 1월 12일': 5,
-  };
+  // Photo data grouped by date
+  Map<String, List<Photo>> _photosByDate = {};
+
+  // All photos
+  List<Photo> _allPhotos = [];
 
   // Domain services
   late final UploadStateService _uploadStateService;
   late final PhotoSelectionService _photoSelectionService;
+  final _localRepo = LocalPhotoRepository();
+
+  // Loading state
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -33,6 +39,81 @@ class _GalleryPageState extends State<GalleryPage> {
     // Listen to service changes and rebuild UI
     _uploadStateService.addListener(_onUploadStateChanged);
     _photoSelectionService.addListener(_onSelectionStateChanged);
+
+    // Load photos from local repository
+    _loadPhotos();
+  }
+
+  /// Load photos from local repository
+  Future<void> _loadPhotos() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final photosByDate = await _localRepo.getPhotosByDate();
+      final allPhotos = await _localRepo.getAllPhotos();
+
+      setState(() {
+        _photosByDate = photosByDate;
+        _allPhotos = allPhotos;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('사진 로드 중 오류 발생: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Add photo to UI immediately when saved
+  void _onPhotoSaved(Photo photo) {
+    setState(() {
+      // Add to all photos list
+      _allPhotos.insert(0, photo);
+
+      // Add to date-grouped map
+      final dateKey = _formatDate(photo.createdAt ?? DateTime.now());
+      if (!_photosByDate.containsKey(dateKey)) {
+        _photosByDate[dateKey] = [];
+      }
+      _photosByDate[dateKey]!.insert(0, photo);
+    });
+  }
+
+  /// Format date for grouping
+  String _formatDate(DateTime date) {
+    final year = date.year;
+    final month = date.month;
+    final day = date.day;
+    return '$year년 $month월 $day일';
+  }
+
+  void _navigateToPhotoDetail(String photoId) async {
+    final photoIndex = _allPhotos.indexWhere((photo) => photo.id == photoId);
+    if (photoIndex != -1) {
+      final result = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PhotoDetailPage(
+            photos: _allPhotos,
+            initialIndex: photoIndex,
+          ),
+        ),
+      );
+
+      // Reload photos if any were deleted
+      if (result == true && mounted) {
+        await _loadPhotos();
+      }
+    }
   }
 
   @override
@@ -59,6 +140,7 @@ class _GalleryPageState extends State<GalleryPage> {
         onProgress: (current, total) {
           _uploadStateService.updateProgress(current, total);
         },
+        onPhotoSaved: _onPhotoSaved,
       );
 
       _uploadStateService.finishUpload();
@@ -67,7 +149,7 @@ class _GalleryPageState extends State<GalleryPage> {
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 업로드 완료'),
+            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 로컬 저장 완료'),
           ),
         );
       }
@@ -91,6 +173,7 @@ class _GalleryPageState extends State<GalleryPage> {
         onProgress: (current, total) {
           _uploadStateService.updateProgress(current, total);
         },
+        onPhotoSaved: _onPhotoSaved,
       );
 
       _uploadStateService.finishUpload();
@@ -99,7 +182,7 @@ class _GalleryPageState extends State<GalleryPage> {
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 업로드 완료'),
+            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 로컬 저장 완료'),
           ),
         );
       }
@@ -123,6 +206,7 @@ class _GalleryPageState extends State<GalleryPage> {
         onProgress: (current, total) {
           _uploadStateService.updateProgress(current, total);
         },
+        onPhotoSaved: _onPhotoSaved,
       );
 
       _uploadStateService.finishUpload();
@@ -131,7 +215,7 @@ class _GalleryPageState extends State<GalleryPage> {
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 이미지 업로드 완료'),
+            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 이미지 로컬 저장 완료'),
           ),
         );
       }
@@ -154,21 +238,60 @@ class _GalleryPageState extends State<GalleryPage> {
       appBar: _buildAppBar(),
       body: Stack(
         children: [
-          ListView.builder(
-            itemCount: _photoSections.length,
-            itemBuilder: (context, index) {
-              final date = _photoSections.keys.elementAt(index);
-              final imageCount = _photoSections.values.elementAt(index);
-              return _DateSection(
-                date: date,
-                imageCount: imageCount,
-                selectedPhotos: _photoSelectionService.selectedPhotos,
-                isMultiSelectMode: _photoSelectionService.isMultiSelectMode,
-                onPhotoTap: _photoSelectionService.onPhotoTap,
-                onPhotoLongPress: _photoSelectionService.onPhotoLongPress,
-              );
-            },
-          ),
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _photosByDate.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 80,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '사진이 없습니다',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '하단의 + 버튼을 눌러 사진을 추가하세요',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _photosByDate.length,
+                      itemBuilder: (context, index) {
+                        final date = _photosByDate.keys.elementAt(index);
+                        final photos = _photosByDate[date]!;
+                        return _DateSection(
+                          date: date,
+                          photos: photos,
+                          localRepo: _localRepo,
+                          selectedPhotos: _photoSelectionService.selectedPhotos,
+                          isMultiSelectMode: _photoSelectionService.isMultiSelectMode,
+                          onPhotoTap: (photoId) {
+                            if (_photoSelectionService.isMultiSelectMode) {
+                              _photoSelectionService.onPhotoTap(photoId);
+                            } else {
+                              _navigateToPhotoDetail(photoId);
+                            }
+                          },
+                          onPhotoLongPress: _photoSelectionService.onPhotoLongPress,
+                        );
+                      },
+                    ),
           // Upload progress indicator on the left side
           if (_uploadStateService.isUploading)
             Positioned(
@@ -274,7 +397,8 @@ class _GalleryPageState extends State<GalleryPage> {
 
 class _DateSection extends StatelessWidget {
   final String date;
-  final int imageCount;
+  final List<Photo> photos;
+  final LocalPhotoRepository localRepo;
   final Set<String> selectedPhotos;
   final bool isMultiSelectMode;
   final Function(String) onPhotoTap;
@@ -282,7 +406,8 @@ class _DateSection extends StatelessWidget {
 
   const _DateSection({
     required this.date,
-    required this.imageCount,
+    required this.photos,
+    required this.localRepo,
     required this.selectedPhotos,
     required this.isMultiSelectMode,
     required this.onPhotoTap,
@@ -309,16 +434,17 @@ class _DateSection extends StatelessWidget {
             crossAxisSpacing: 2.0,
             mainAxisSpacing: 2.0,
           ),
-          itemCount: imageCount,
+          itemCount: photos.length,
           itemBuilder: (context, index) {
-            final photoId = '$date-$index'; // Unique ID for each photo
-            final isSelected = selectedPhotos.contains(photoId);
+            final photo = photos[index];
+            final isSelected = selectedPhotos.contains(photo.id);
             return _PhotoItem(
-              photoId: photoId,
+              photo: photo,
+              localRepo: localRepo,
               isSelected: isSelected,
               isMultiSelectMode: isMultiSelectMode,
-              onTap: () => onPhotoTap(photoId),
-              onLongPress: () => onPhotoLongPress(photoId),
+              onTap: () => onPhotoTap(photo.id),
+              onLongPress: () => onPhotoLongPress(photo.id),
             );
           },
         ),
@@ -328,14 +454,16 @@ class _DateSection extends StatelessWidget {
 }
 
 class _PhotoItem extends StatelessWidget {
-  final String photoId;
+  final Photo photo;
+  final LocalPhotoRepository localRepo;
   final bool isSelected;
   final bool isMultiSelectMode;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
   const _PhotoItem({
-    required this.photoId,
+    required this.photo,
+    required this.localRepo,
     required this.isSelected,
     required this.isMultiSelectMode,
     required this.onTap,
@@ -350,10 +478,90 @@ class _PhotoItem extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Container(
-            color: Colors.grey[300],
-            // Placeholder for the image
+          // Display thumbnail from cache only
+          FutureBuilder<File?>(
+            future: localRepo.getThumbnail(photo.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                // Loading placeholder
+                return Container(
+                  color: Colors.grey[300],
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              } else if (snapshot.hasData && snapshot.data != null) {
+                // Display thumbnail
+                return Image.file(
+                  snapshot.data!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey[300],
+                      child: const Center(
+                        child: Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    );
+                  },
+                );
+              } else {
+                // No thumbnail available
+                return Container(
+                  color: Colors.grey[300],
+                  child: const Center(
+                    child: Icon(Icons.image, color: Colors.grey),
+                  ),
+                );
+              }
+            },
           ),
+          // Upload status indicator
+          if (photo.uploadStatus == UploadStatus.pending ||
+              photo.uploadStatus == UploadStatus.uploading)
+            Positioned(
+              bottom: 4,
+              right: 4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: photo.uploadStatus == UploadStatus.uploading
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.cloud_upload_outlined,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+              ),
+            ),
+          // Failed upload indicator
+          if (photo.uploadStatus == UploadStatus.failed)
+            Positioned(
+              bottom: 4,
+              right: 4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Icon(
+                  Icons.error_outline,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          // Multi-select checkbox
           if (isMultiSelectMode)
             Positioned(
               top: 4,
@@ -363,6 +571,7 @@ class _PhotoItem extends StatelessWidget {
                 color: isSelected ? Theme.of(context).primaryColor : Colors.white70,
               ),
             ),
+          // Selection overlay
           if (isSelected)
             Container(
               color: Colors.black.withValues(alpha: 0.3),
@@ -371,6 +580,7 @@ class _PhotoItem extends StatelessWidget {
       ),
     );
   }
+
 }
 
 class _UploadProgressIndicator extends StatelessWidget {

@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import '../data/cache/photo_cache_service.dart';
 
 // Backend server configuration
 const String _baseUrl = 'https://your-backend-api.com'; // TODO: Replace with actual backend URL
@@ -11,9 +11,6 @@ const String _downloadEndpoint = '/api/v1/download';        // TODO: Replace wit
 enum LogLevel { debug, info, warning, error }
 
 void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
-  final levelStr = level.toString().split('.').last.toUpperCase();
-  final timestamp = DateTime.now().toIso8601String();
-
   developer.log(
     message,
     time: DateTime.now(),
@@ -86,29 +83,86 @@ Future<Map<String, dynamic>?> downloadFileToCache(String fileId, {String? fileNa
   }
 }
 
-/// Downloads thumbnails for multiple files to cache
+/// Downloads a thumbnail with caching support
+/// Returns the cached file or downloads from backend if not cached
+Future<File?> downloadThumbnailWithCache(
+  String photoId, {
+  bool forceRefresh = false,
+}) async {
+  final cacheService = PhotoCacheService();
+
+  try {
+    // 1. Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      final cachedFile = await cacheService.getCachedThumbnail(photoId);
+      if (cachedFile != null) {
+        _log('썸네일 캐시 히트: $photoId', level: LogLevel.info);
+        return cachedFile;
+      }
+    }
+
+    // 2. Cache miss or force refresh - download from backend
+    _log('썸네일 캐시 미스 - 백엔드 다운로드: $photoId');
+
+    final uri = Uri.parse('$_baseUrl$_downloadEndpoint/$photoId/thumbnail');
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        // Add authorization header if needed
+        // 'Authorization': 'Bearer YOUR_TOKEN',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      // 3. Cache the downloaded thumbnail
+      final cachedFile = await cacheService.cacheThumbnail(
+        photoId,
+        response.bodyBytes,
+      );
+
+      _log('썸네일 다운로드 및 캐싱 성공: $photoId', level: LogLevel.info);
+      return cachedFile;
+    } else {
+      _log('썸네일 다운로드 실패 (상태 코드: ${response.statusCode}): $photoId',
+          level: LogLevel.warning);
+      return null;
+    }
+  } catch (e) {
+    _log('썸네일 다운로드 오류: $photoId', level: LogLevel.error, error: e);
+    return null;
+  }
+}
+
+/// Downloads thumbnails for multiple files to cache with caching support
 /// Returns a summary of the download operation
 Future<Map<String, dynamic>> downloadThumbnailsToCache(
   List<String> fileIds, {
   Function(int current, int total)? onProgress,
+  bool forceRefresh = false,
 }) async {
   final downloadResults = <Map<String, dynamic>>[];
   final failedFiles = <String>[];
+  final cachedFiles = <String>[];
   int successCount = 0;
 
-  _log('Starting thumbnail download batch: ${fileIds.length} files');
+  _log('썸네일 일괄 다운로드 시작: ${fileIds.length}개');
 
   for (var i = 0; i < fileIds.length; i++) {
     final fileId = fileIds[i];
     try {
-      // Download thumbnail version (you might need to adjust endpoint)
-      final thumbnailResult = await downloadFileToCache(
+      final thumbnailFile = await downloadThumbnailWithCache(
         fileId,
-        fileName: 'thumb_$fileId.jpg',
+        forceRefresh: forceRefresh,
       );
 
-      if (thumbnailResult != null && thumbnailResult['success'] == true) {
-        downloadResults.add(thumbnailResult);
+      if (thumbnailFile != null) {
+        downloadResults.add({
+          'fileId': fileId,
+          'filePath': thumbnailFile.path,
+          'success': true,
+        });
         successCount++;
       } else {
         failedFiles.add(fileId);
@@ -117,7 +171,7 @@ Future<Map<String, dynamic>> downloadThumbnailsToCache(
       // Call progress callback if provided
       onProgress?.call(i + 1, fileIds.length);
     } catch (e) {
-      _log('Thumbnail download failed: $fileId', level: LogLevel.error, error: e);
+      _log('썸네일 다운로드 실패: $fileId', level: LogLevel.error, error: e);
       failedFiles.add(fileId);
     }
   }
@@ -128,10 +182,11 @@ Future<Map<String, dynamic>> downloadThumbnailsToCache(
     'successCount': successCount,
     'failedCount': failedFiles.length,
     'failedFiles': failedFiles,
+    'cachedFiles': cachedFiles,
     'results': downloadResults,
   };
 
-  _log('Thumbnail download complete: $successCount/${fileIds.length} successful');
+  _log('썸네일 일괄 다운로드 완료: $successCount/${fileIds.length} 성공');
 
   return summary;
 }

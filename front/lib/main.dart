@@ -2,9 +2,21 @@ import 'package:flutter/material.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/signup_page.dart';
 import 'features/shared/presentation/pages/main_scaffold.dart';
-import 'features/gallery/presentation/pages/gallery_page.dart';
+import 'features/gallery/data/cache/photo_cache_service.dart';
+import 'features/gallery/data/repositories/local_photo_repository.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize cache service
+  final cacheService = PhotoCacheService();
+  await cacheService.initialize();
+
+  // Initialize local photo repository
+  final localPhotoRepo = LocalPhotoRepository();
+  await localPhotoRepo.initialize();
+
   runApp(const MyApp());
 }
 

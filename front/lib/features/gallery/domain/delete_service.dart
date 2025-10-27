@@ -10,9 +10,6 @@ const String _deleteEndpoint = '/api/v1/delete';        // TODO: Replace with ac
 enum LogLevel { debug, info, warning, error }
 
 void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
-  final levelStr = level.toString().split('.').last.toUpperCase();
-  final timestamp = DateTime.now().toIso8601String();
-
   developer.log(
     message,
     time: DateTime.now(),
