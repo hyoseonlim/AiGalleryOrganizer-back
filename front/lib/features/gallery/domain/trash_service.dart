@@ -4,7 +4,7 @@ import 'dart:convert';
 
 // Backend server configuration
 const String _baseUrl = 'https://your-backend-api.com'; // TODO: Replace with actual backend URL
-const String _deleteEndpoint = '/api/v1/delete';        // TODO: Replace with actual endpoint
+const String _deleteEndpoint = '/api/images/';        // TODO: Replace with actual endpoint
 
 // Logging configuration
 enum LogLevel { debug, info, warning, error }
