@@ -49,8 +49,9 @@ def notify_upload_complete(
     Notify the server that an image upload is complete and trigger processing.
     """
     return image_service.notify_upload_complete(
-        s3_client=s3_client,
         image_id=request.image_id,
+        hash=request.hash,
+        metadata=request.metadata,
         user=current_user
     )
 

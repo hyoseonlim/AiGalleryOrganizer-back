@@ -1,6 +1,7 @@
 # app/schemas/image.py
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 from datetime import datetime
 from app.models.image import AIProcessingStatus
 
@@ -14,8 +15,21 @@ class PresignedUrl(BaseModel):
 class ImageUploadResponse(BaseModel):
     presigned_urls: List[PresignedUrl]
 
+class ImageMetadata(BaseModel):
+    width: int
+    height: int
+    file_size: Optional[int] = Field(None, alias="fileSize")
+    date_taken: Optional[datetime] = Field(None, alias="dateTaken")
+    mime_type: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    exif_data: Optional[Dict[str, Any]] = Field(None, alias="exifData")
+
 class UploadCompleteRequest(BaseModel):
     image_id: int
+    hash: str
+    metadata: ImageMetadata
+
 
 class UploadCompleteResponse(BaseModel):
     image_id: int

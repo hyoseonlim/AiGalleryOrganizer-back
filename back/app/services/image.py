@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 from typing import List
 
 from app.repositories.image import ImageRepository
-from app.schemas.image import ImageUploadResponse, PresignedUrl, UploadCompleteResponse, ImageResponse
+from app.schemas.image import ImageUploadResponse, PresignedUrl, UploadCompleteResponse, ImageResponse, ImageMetadata
 from app.models.user import User
 from config.config import settings
 
@@ -46,7 +46,7 @@ class ImageService:
         return ImageUploadResponse(presigned_urls=presigned_urls)
 
     def notify_upload_complete(
-        self, *, s3_client, image_id: int, user: User
+        self, *, image_id: int, hash: str, metadata: ImageMetadata, user: User
     ) -> UploadCompleteResponse:
         image = self.repository.find_by_id(image_id, user.id)
 
@@ -56,26 +56,23 @@ class ImageService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image already processed.")
 
         try:
-            s3_object = s3_client.get_object(Bucket=settings.S3_BUCKET_NAME, Key=image.url)
-            image_data = s3_object['Body'].read()
-            
-            image_hash = hashlib.sha256(image_data).hexdigest()
-            image_size = len(image_data)
-
-            existing_image = self.repository.find_by_hash(image_hash)
+            existing_image = self.repository.find_by_hash(hash)
             if existing_image:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Identical image already exists (ID: {existing_image.id}).")
 
-            updated_image = self.repository.update(image, hash=image_hash, size=image_size, is_saved=True)
+            update_data = {
+                "hash": hash,
+                "size": metadata.file_size,
+                "is_saved": True,
+                "exif": metadata.model_dump()
+            }
+            updated_image = self.repository.update(image, **update_data)
 
             return UploadCompleteResponse(
                 image_id=updated_image.id,
                 status="completed",
                 hash=updated_image.hash
             )
-        except ClientError as e:
-            logger.error(f"Error from S3: {e}")
-            raise HTTPException(status_code=404, detail="File not found in S3. Upload may have failed.")
         except Exception as e:
             logger.error(f"An error occurred: {e}")
             raise HTTPException(status_code=500, detail="An internal error occurred.")
