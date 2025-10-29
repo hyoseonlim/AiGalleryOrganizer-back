@@ -17,17 +17,9 @@ class Tag(Base):
     name = Column(String, nullable=False, unique=True)
     category = Column(Enum(TagCategory), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # nullable for general tags
+    parent_tag_id = Column(Integer, ForeignKey("tags.tag_id"), nullable=True)
 
     user = relationship("User", back_populates="tags")
     images = relationship("ImageTag", back_populates="tag")
-
-class TagHierarchy(Base):
-    __tablename__ = "tag_hierarchy"
-
-    id = Column(Integer, primary_key=True, index=True)
-    parent_tag_id = Column(Integer, ForeignKey("tags.tag_id"), nullable=False)
-    child_tag_id = Column(Integer, ForeignKey("tags.tag_id"), nullable=False)
-    relation_type = Column(String, nullable=True)
-
-    parent_tag = relationship("Tag", foreign_keys=[parent_tag_id])
-    child_tag = relationship("Tag", foreign_keys=[child_tag_id])
+    parent_tag = relationship("Tag", remote_side=[Tag.id], back_populates="child_tags")
+    child_tags = relationship("Tag", back_populates="parent_tag")
