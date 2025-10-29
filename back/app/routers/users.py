@@ -9,10 +9,7 @@ from app.schemas.image import ImageResponse
 from app.services.user import UserService
 from app.services.image import ImageService
 
-router = APIRouter(
-    prefix="/users",
-    tags=["users"],
-)
+router = APIRouter(tags=["users"])
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(

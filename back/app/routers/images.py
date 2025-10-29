@@ -19,9 +19,7 @@ from app.services.user import UserService
 from app.tasks import analyze_image_task
 from config.config import settings
 
-router = APIRouter(
-    tags=["images"],
-)
+router = APIRouter(tags=["images"])
 
 @router.post("/upload/request", response_model=ImageUploadResponse)
 def request_upload_urls(
