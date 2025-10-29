@@ -37,6 +37,10 @@ services:
       - DEBUG=True
       - SECRET_KEY=dev-secret-key
       - REDIS_URL=redis://redis:6379/0
+      - DB_HOST=db # Added
+      - DB_PORT=5432 # Added
+      - DB_USER=vizota_user # Added
+      - SEED_DATA=true # Added
     depends_on:
       db:
         condition: service_healthy
@@ -54,6 +58,7 @@ services:
       - DEBUG=True
       - SECRET_KEY=dev-secret-key
       - REDIS_URL=redis://redis:6379/0
+      - SEED_DATA=false # Added to explicitly prevent seeding
     depends_on:
       db:
         condition: service_healthy

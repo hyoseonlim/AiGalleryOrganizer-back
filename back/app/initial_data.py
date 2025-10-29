@@ -1,17 +1,45 @@
 from app.database import SessionLocal, engine, Base
-from app.models import User, Album, Image
+from app.models import User, Album, Image, Category, Tag # Added Tag
 from app.models.album import AlbumType
 from app.models.image import AIProcessingStatus
 from app.security import get_password_hash
 
 def seed_data():
-    # Create tables
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         # 데이터가 이미 있는지 확인
         if db.query(User).first() is None:
             print("Seeding initial data...")
+
+            # Categories 생성
+            category_landscape = Category(name="landscape")
+            category_people = Category(name="people")
+            category_animal = Category(name="animal")
+            category_food = Category(name="food")
+            category_city = Category(name="city")
+            category_custom = Category(name="custom") # Added a custom category
+
+            db.add_all([category_landscape, category_people, category_animal, category_food, category_city, category_custom])
+            db.commit()
+
+            # Refresh categories to get their IDs
+            db.refresh(category_landscape)
+            db.refresh(category_people)
+            db.refresh(category_animal)
+            db.refresh(category_food)
+            db.refresh(category_city)
+            db.refresh(category_custom)
+
+            # Tags 생성 (using category_id)
+            tag_mountain = Tag(name="mountain", category_id=category_landscape.id, user_id=None)
+            tag_beach = Tag(name="beach", category_id=category_landscape.id, user_id=None)
+            tag_dog = Tag(name="dog", category_id=category_animal.id, user_id=None)
+            tag_cat = Tag(name="cat", category_id=category_animal.id, user_id=None)
+            tag_pizza = Tag(name="pizza", category_id=category_food.id, user_id=None)
+            tag_burger = Tag(name="burger", category_id=category_food.id, user_id=None)
+
+            db.add_all([tag_mountain, tag_beach, tag_dog, tag_cat, tag_pizza, tag_burger])
+            db.commit()
 
             # 사용자 생성
             user1 = User(username="user1", email="user1@example.com", password=get_password_hash("11111111"))
