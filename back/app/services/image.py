@@ -11,6 +11,7 @@ from typing import List
 from app.repositories.image import ImageRepository
 from app.schemas.image import ImageUploadResponse, PresignedUrl, UploadCompleteResponse, ImageResponse, ImageMetadata
 from app.models.user import User
+from app.models.image import Image
 from config.config import settings
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class ImageService:
 
     def notify_upload_complete(
         self, *, image_id: int, hash: str, metadata: ImageMetadata, user: User
-    ) -> UploadCompleteResponse:
+    ) -> Image:
         image = self.repository.find_by_id(image_id, user.id)
 
         if not image:
@@ -68,14 +69,12 @@ class ImageService:
             }
             updated_image = self.repository.update(image, **update_data)
 
-            return UploadCompleteResponse(
-                image_id=updated_image.id,
-                status="completed",
-                hash=updated_image.hash
-            )
+            return updated_image
+        except HTTPException as e:
+            raise e
         except Exception as e:
-            logger.error(f"An error occurred: {e}")
-            raise HTTPException(status_code=500, detail="An internal error occurred.")
+            logger.error(f"An unexpected error occurred: {e}")
+            raise HTTPException(status_code=500, detail="An internal server error occurred during image processing.")
 
     def get_viewable_url(self, *, image_id: int, user: User) -> str:
         if not settings.CLOUDFRONT_DOMAIN:

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app.models import album, association, image, tag, user
 from app.routers import users, images, auth
+from app.celery_worker import celery_app
 
 app = FastAPI(
     title="Vizota API",
