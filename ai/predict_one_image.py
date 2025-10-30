@@ -71,21 +71,10 @@ class Image(torch.utils.data.Dataset):
         new_h = 224
         new_w = 224
 
-        # 이미지가 너무 작으면 리사이즈
-        if h < new_h or w < new_w:
-            scale = max(new_h / h, new_w / w)
-            target_h = int(h * scale) + 1
-            target_w = int(w * scale) + 1
-            # cv2로 리사이즈 (채널 순서 변경 필요)
-            img_for_resize = np.transpose(self.img, (1, 2, 0))  # (C, H, W) -> (H, W, C)
-            img_resized = cv2.resize(img_for_resize, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
-            self.img = np.transpose(img_resized, (2, 0, 1))  # (H, W, C) -> (C, H, W)
-            c, h, w = self.img.shape
-
         self.img_patches = []
         for i in range(num_crops):
-                top = np.random.randint(0, h - new_h + 1)
-                left = np.random.randint(0, w - new_w + 1)
+                top = np.random.randint(0, h - new_h)
+                left = np.random.randint(0, w - new_w)
                 patch = self.img[:, top: top + new_h, left: left + new_w]
                 self.img_patches.append(patch)
             
