@@ -52,8 +52,9 @@ except KeyError:
 
 #https://d206helh22e0a3.cloudfront.net/images/brow/combo/combo.png -> test용 image link
 def main():
-    img_url = 'https://d206helh22e0a3.cloudfront.net/images/brow/combo/combo.png'
-    image = Image.open(urlopen('https://gogumafarm.kr/wp-content/uploads/2024/04/%ED%8F%AC%EC%BC%93%EB%AA%AC-%ED%83%80%EC%9A%B4_%ED%94%BC%EC%B9%B4%EC%B8%84%EB%A5%BC-%ED%83%9C%EC%9A%B4-%EB%8C%80%ED%98%95-%EB%9D%BC%ED%94%84%EB%9D%BC%EC%8A%A4.png')).convert('RGB')
+    img_url = 'https://gogumafarm.kr/wp-content/uploads/2024/04/%ED%8F%AC%EC%BC%93%EB%AA%AC-%ED%83%80%EC%9A%B4_%ED%94%BC%EC%B9%B4%EC%B8%84%EB%A5%BC-%ED%83%9C%EC%9A%B4-%EB%8C%80%ED%98%95-%EB%9D%BC%ED%94%84%EB%9D%BC%EC%8A%A4.png'
+    # 이미지를 한 번만 다운로드
+    image = Image.open(urlopen(img_url)).convert('RGB')
     #임시 대분류 set
     candidate_labels = ['Happy date with my boyfriend Minsu', 'dinner', 'travel', 'landscape']
 
@@ -62,7 +63,8 @@ def main():
         #tag
         outputs = model(**inputs)
         logits = outputs.logits
-        quality_score = predict_one_image(img_url)
+        # PIL Image 객체를 직접 전달 (URL 다시 다운로드 안함)
+        quality_score = predict_one_image.main(image)
         #quality
     
     #tagging result

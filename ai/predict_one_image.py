@@ -11,7 +11,6 @@ from torch.utils.data import DataLoader
 from config import Config
 from inference_process import ToTensor, Normalize
 from tqdm import tqdm
-from image_tagging_mobilenetvit import img_url
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -27,13 +26,22 @@ def setup_seed(seed):
 
 
 class Image(torch.utils.data.Dataset):
-    def __init__(self, image_path, transform, num_crops=20):
+    def __init__(self, image_path_or_array, transform, num_crops=20):
         super(Image, self).__init__()
         
-        if image_path.startswith('https'):
-            self.img_name = image_path.split('/')[-1]
+        # PIL Image 객체인 경우
+        if hasattr(image_path_or_array, 'convert'):
+            from PIL import Image as PILImage
+            self.img_name = "pil_image.jpg"
+            pil_img = image_path_or_array.convert('RGB')
+            self.img = np.array(pil_img).astype('float32') / 255
+            self.img = np.transpose(self.img, (2, 0, 1))
+        
+        # URL인 경우
+        elif isinstance(image_path_or_array, str) and image_path_or_array.startswith('https'):
+            self.img_name = image_path_or_array.split('/')[-1]
             try:
-                response = requests.get(image_path)
+                response = requests.get(image_path_or_array)
                 response.raise_for_status()
                 
                 image_bytes = np.frombuffer(response.content, np.uint8)
@@ -47,10 +55,11 @@ class Image(torch.utils.data.Dataset):
                     raise
             except requests.exceptions.RequestException as e:
                 raise
-            
+        
+        # 로컬 파일 경로인 경우
         else:
-            self.img_name = image_path.split('/')[-1]
-            self.img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+            self.img_name = image_path_or_array.split('/')[-1]
+            self.img = cv2.imread(image_path_or_array, cv2.IMREAD_COLOR)
             self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
             self.img = np.array(self.img).astype('float32') / 255
             self.img = np.transpose(self.img, (2, 0, 1))
@@ -62,10 +71,21 @@ class Image(torch.utils.data.Dataset):
         new_h = 224
         new_w = 224
 
+        # 이미지가 너무 작으면 리사이즈
+        if h < new_h or w < new_w:
+            scale = max(new_h / h, new_w / w)
+            target_h = int(h * scale) + 1
+            target_w = int(w * scale) + 1
+            # cv2로 리사이즈 (채널 순서 변경 필요)
+            img_for_resize = np.transpose(self.img, (1, 2, 0))  # (C, H, W) -> (H, W, C)
+            img_resized = cv2.resize(img_for_resize, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+            self.img = np.transpose(img_resized, (2, 0, 1))  # (H, W, C) -> (C, H, W)
+            c, h, w = self.img.shape
+
         self.img_patches = []
         for i in range(num_crops):
-                top = np.random.randint(0, h - new_h)
-                left = np.random.randint(0, w - new_w)
+                top = np.random.randint(0, h - new_h + 1)
+                left = np.random.randint(0, w - new_w + 1)
                 patch = self.img[:, top: top + new_h, left: left + new_w]
                 self.img_patches.append(patch)
             
@@ -78,7 +98,11 @@ class Image(torch.utils.data.Dataset):
             sample = self.transform(sample)
         return sample
 
-def main(img_str):
+def main(img_input):
+    """
+    Args:
+        img_input: URL string, file path string, or PIL Image object
+    """
     cpu_num = 1
     os.environ['OMP_NUM_THREADS'] = str(cpu_num)
     os.environ['OPENBLAS_NUM_THREADS'] = str(cpu_num)
@@ -91,8 +115,8 @@ def main(img_str):
 
     # config file
     config = Config({
-        # image path
-        "image_path": img_str,
+        # image path or object
+        "image_path": img_input,
 
         # valid times
         "num_crops": 20,
@@ -113,11 +137,11 @@ def main(img_str):
         ##########################
         #서버에 올라갈 경우 수정 필요#
         ##########################
-        "ckpt_path": r"C:\Users\Contemplator\Desktop\MANIQA\MANIQA\ckpt\ckpt_koniq10k.pt",
+        "ckpt_path": "/Users/relained/Downloads/ckpt_koniq10k.pt",
     })
     
     # data load
-    Img = Image(image_path=config.image_path,
+    Img = Image(image_path_or_array=config.image_path,
         transform=transforms.Compose([Normalize(0.5, 0.5), ToTensor()]),
         num_crops=config.num_crops)
     
@@ -126,15 +150,23 @@ def main(img_str):
         patch_size=config.patch_size, img_size=config.img_size, window_size=config.window_size,
         depths=config.depths, num_heads=config.num_heads, num_tab=config.num_tab, scale=config.scale)
 
-    net.load_state_dict(torch.load(config.ckpt_path), strict=False)
-    net = net.cuda()
+    # 디바이스 설정 (CUDA, MPS, CPU)
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+    else:
+        device = torch.device('cpu')
+    
+    net.load_state_dict(torch.load(config.ckpt_path, map_location=device), strict=False)
+    net = net.to(device)
 
     avg_score = 0
     for i in tqdm(range(config.num_crops)):
         with torch.no_grad():
             net.eval()
             patch_sample = Img.get_patch(i)
-            patch = patch_sample['d_img_org'].cuda()
+            patch = patch_sample['d_img_org'].to(device)
             patch = patch.unsqueeze(0)
             score = net(patch)
             avg_score += score
@@ -143,7 +175,9 @@ def main(img_str):
 
 
 if __name__ == '__main__':  
-    #img_str을 받아서 main에 넣는 logic
-    score = main(img_url)
+    # 테스트용 - 실제 사용 시에는 main() 함수를 직접 호출
+    test_img_url = "https://d206helh22e0a3.cloudfront.net/images/brow/combo/combo.png"
+    score = main(test_img_url)
+    print(f"Quality Score: {score}")
     
     
