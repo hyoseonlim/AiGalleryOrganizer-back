@@ -9,7 +9,6 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 import logging
 import requests
 import json
-from urllib.request import urlopen
 
 from celery import Celery
 from typing import List, Optional, Dict, Any
@@ -37,11 +36,12 @@ app.conf.update(
     accept_content=['json'],
     result_serializer='json',
     timezone='Asia/Seoul',
-    enable_utc=True,
+    enable_utc=False,
     task_track_started=True,
     task_time_limit=300,  # 5분 타임아웃
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=50,
+    broker_connection_retry_on_startup=True,
 )
 
 # 디바이스 설정
@@ -65,7 +65,7 @@ feature_maps = {}
 target_layer_name = 'dropout'
 
 # 백엔드 API 설정 (환경변수로 설정 가능)
-BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8080/api/ai/result')  # TODO: 실제 API 경로로 변경
+BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8000/api/images/{image_id}/analysis-results')
 
 
 # Feature map hook
@@ -141,27 +141,48 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
         if task_id:
             result_data['task_id'] = task_id
 
-        logger.info(f"Sending result to backend: {BACKEND_API_URL}")
-        logger.debug(f"Result data: {json.dumps(result_data, indent=2)}")
+        # image_id로 URL 동적 생성
+        image_id = result_data.get('image_id')
+        if image_id:
+            api_url = BACKEND_API_URL.format(image_id=image_id)
+        else:
+            # image_id가 없으면 기본 URL 사용
+            api_url = BACKEND_API_URL.replace('/{image_id}', '')
+
+        logger.info(f"📤 Sending result to backend: {api_url}")
+        logger.info(f"📊 Analysis Result Summary:")
+        logger.info(f"   • Tag: {result_data.get('tag_name', 'N/A')} ({result_data.get('probability', 0):.2f}%)")
+
+        category_prob = result_data.get('category_probability')
+        category_prob_str = f"({category_prob:.2f}%)" if category_prob is not None else "(N/A)"
+        logger.info(f"   • Category: {result_data.get('category', 'N/A')} {category_prob_str}")
+
+        quality_score = result_data.get('quality_score')
+        quality_str = f"{quality_score:.4f}" if quality_score is not None else "N/A"
+        logger.info(f"   • Quality Score: {quality_str}")
+
+        logger.info(f"   • Image ID: {result_data.get('image_id', 'N/A')}")
+        logger.debug(f"🔍 Full result data: {json.dumps(result_data, indent=2)}")
 
         response = requests.post(
-            BACKEND_API_URL,
+            api_url,
             json=result_data,
             headers=headers,
             timeout=30
         )
 
         response.raise_for_status()
-        logger.info(f"Result sent successfully. Response: {response.status_code}")
+        logger.info(f"✅ Result sent successfully. Response: {response.status_code}")
+        logger.info(f"📥 Backend response: {response.text[:200]}{'...' if len(response.text) > 200 else ''}")
         return True
 
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to send result to backend: {e}")
+        logger.error(f"❌ Failed to send result to backend: {e}")
         return False
 
 
 # 이미지 분석 Celery Task
-@app.task(bind=True, name='vizota_ai.analyze_image')
+@app.task(bind=True, name='app.tasks.analyze_image_task')
 def analyze_image_task(
     self,
     image_url: str,
@@ -201,7 +222,11 @@ def analyze_image_task(
 
         # 이미지 다운로드
         try:
-            image = Image.open(urlopen(image_url)).convert('RGB')
+            response = requests.get(image_url, verify=False, timeout=30)
+            response.raise_for_status()
+            from io import BytesIO
+            image = Image.open(BytesIO(response.content)).convert('RGB')
+            logger.info(f"✅ Image downloaded successfully: {len(response.content)} bytes")
         except Exception as e:
             error_msg = f"Failed to load image: {str(e)}"
             logger.error(error_msg)

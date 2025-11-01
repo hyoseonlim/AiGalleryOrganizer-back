@@ -7,8 +7,7 @@ redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery(
     "vizota_backend",
     broker=redis_url,
-    backend=redis_url,
-    include=["app.tasks"]
+    backend=redis_url
 )
 
 celery_app.conf.update(

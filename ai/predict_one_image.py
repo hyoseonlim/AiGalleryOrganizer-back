@@ -127,7 +127,7 @@ def main(img_input):
         ##########################
         #서버에 올라갈 경우 수정 필요#
         ##########################
-        "ckpt_path": "/Users/relained/Downloads/ckpt_koniq10k.pt",
+        "ckpt_path": "/Users/imhyoseon/해커톤/Team6-Vizota/ai/ckpt_koniq10k.pt",
     })
     
     # data load
