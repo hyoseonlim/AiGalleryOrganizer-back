@@ -172,6 +172,23 @@ class LocalPhotoRepository {
     return groupedPhotos;
   }
 
+  /// 업로드 중이거나 대기 중인 사진만 가져오기
+  Future<List<Photo>> getUploadingPhotos() async {
+    try {
+      final allPhotos = await getAllPhotos();
+      final uploadingPhotos = allPhotos.where((photo) =>
+        photo.uploadStatus == UploadStatus.pending ||
+        photo.uploadStatus == UploadStatus.uploading
+      ).toList();
+
+      _log('업로드 중인 사진: ${uploadingPhotos.length}개');
+      return uploadingPhotos;
+    } catch (e) {
+      _log('업로드 중인 사진 조회 실패: $e', isError: true);
+      return [];
+    }
+  }
+
   /// 사진 업로드 상태 업데이트
   Future<void> updateUploadStatus(String photoId, UploadStatus status) async {
     try {

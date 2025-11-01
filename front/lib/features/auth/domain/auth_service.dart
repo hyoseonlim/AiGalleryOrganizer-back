@@ -70,7 +70,7 @@ class AuthService {
     required String username,
     required String password,
   }) async {
-    final uri = Uri.parse('$_baseUrl/api/users/users/');
+    final uri = Uri.parse('$_baseUrl/api/users/');
 
     try {
       await NetworkPolicyService.instance.ensureAllowedConnectivity();

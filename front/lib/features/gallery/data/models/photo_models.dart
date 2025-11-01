@@ -446,28 +446,83 @@ enum AIProcessingStatus {
   String toApiString() => name.toUpperCase();
 }
 
-/// 백엔드 API 이미지 응답 모델
+/// 이미지 메타데이터 (OpenAPI 스펙)
+class ImageMetadata {
+  final int width;
+  final int height;
+  final int? fileSize;
+  final DateTime? dateTaken;
+  final String? mimeType;
+  final double? latitude;
+  final double? longitude;
+  final Map<String, dynamic>? exifData;
+
+  const ImageMetadata({
+    required this.width,
+    required this.height,
+    this.fileSize,
+    this.dateTaken,
+    this.mimeType,
+    this.latitude,
+    this.longitude,
+    this.exifData,
+  });
+
+  factory ImageMetadata.fromMap(Map<String, dynamic> map) {
+    return ImageMetadata(
+      width: map['width'] as int? ?? 0,
+      height: map['height'] as int? ?? 0,
+      fileSize: map['fileSize'] as int?,
+      dateTaken: map['dateTaken'] != null
+          ? DateTime.parse(map['dateTaken'] as String)
+          : null,
+      mimeType: map['mime_type'] as String?,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+      exifData: map['exifData'] as Map<String, dynamic>?,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'width': width,
+      'height': height,
+      if (fileSize != null) 'fileSize': fileSize,
+      if (dateTaken != null) 'dateTaken': dateTaken!.toIso8601String(),
+      if (mimeType != null) 'mime_type': mimeType,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (exifData != null) 'exifData': exifData,
+    };
+  }
+}
+
+/// 백엔드 API 이미지 응답 모델 (OpenAPI 스펙)
 class ImageResponse {
   final int id;
-  final int userId;
-  final String s3Key;
-  final String hash;
-  final int fileSize;
-  final AIProcessingStatus status;
+  final String? url;  // nullable according to OpenAPI spec
   final DateTime uploadedAt;
+  final AIProcessingStatus status;
+
+  // Extended fields (not in basic response)
+  final int? userId;
+  final String? s3Key;
+  final String? hash;
+  final int? fileSize;
   final DateTime? deletedAt;
   final String? aiDescription;
   final List<String> aiTags;
-  final Map<String, dynamic>? metadata;
+  final ImageMetadata? metadata;
 
   const ImageResponse({
     required this.id,
-    required this.userId,
-    required this.s3Key,
-    required this.hash,
-    required this.fileSize,
-    required this.status,
+    this.url,
     required this.uploadedAt,
+    required this.status,
+    this.userId,
+    this.s3Key,
+    this.hash,
+    this.fileSize,
     this.deletedAt,
     this.aiDescription,
     this.aiTags = const [],
@@ -476,17 +531,28 @@ class ImageResponse {
 
   factory ImageResponse.fromMap(Map<String, dynamic> map) {
     return ImageResponse(
-      id: map['id'] ?? 0,
-      userId: map['user_id'] ?? 0,
-      s3Key: map['s3_key'] ?? '',
-      hash: map['hash'] ?? '',
-      fileSize: map['file_size'] ?? 0,
-      status: AIProcessingStatus.fromString(map['status'] ?? 'PENDING'),
-      uploadedAt: DateTime.parse(map['uploaded_at']),
-      deletedAt: map['deleted_at'] != null ? DateTime.parse(map['deleted_at']) : null,
-      aiDescription: map['ai_description'],
-      aiTags: List<String>.from(map['ai_tags'] ?? []),
-      metadata: map['metadata'],
+      id: map['id'] as int? ?? 0,
+      url: map['url'] as String?,  // nullable
+      uploadedAt: map['uploaded_at'] != null
+          ? DateTime.parse(map['uploaded_at'] as String)
+          : DateTime.now(),
+      status: AIProcessingStatus.fromString(
+        (map['ai_processing_status'] as String?) ??
+        (map['status'] as String?) ??
+        'PENDING'
+      ),
+      userId: map['user_id'] as int?,
+      s3Key: map['s3_key'] as String?,
+      hash: map['hash'] as String?,
+      fileSize: map['file_size'] as int?,
+      deletedAt: map['deleted_at'] != null
+          ? DateTime.parse(map['deleted_at'] as String)
+          : null,
+      aiDescription: map['ai_description'] as String?,
+      aiTags: (map['ai_tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      metadata: map['metadata'] != null
+          ? ImageMetadata.fromMap(map['metadata'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -512,7 +578,7 @@ class ImageResponse {
       id: id.toString(),
       url: localThumbnailPath ?? viewUrl ?? '',
       remoteUrl: viewUrl,
-      fileName: s3Key.split('/').last,
+      fileName: s3Key?.split('/').last ?? 'unknown',
       createdAt: uploadedAt,
       fileSize: fileSize,
       metadata: PhotoMetadata(
@@ -521,7 +587,7 @@ class ImageResponse {
           name: tag,
           type: TagType.system,
         )).toList(),
-        additionalInfo: metadata,
+        additionalInfo: metadata?.toMap(),
       ),
       uploadStatus: _mapAIStatusToUploadStatus(status),
     );
@@ -544,39 +610,38 @@ class ImageResponse {
   String toString() => 'ImageResponse(id: $id, s3Key: $s3Key, status: $status)';
 }
 
-/// 이미지 view URL 응답
+/// 이미지 view URL 응답 (OpenAPI 스펙)
 class ImageViewableResponse {
+  final int imageId;
   final String url;
-  final DateTime expiresAt;
 
   const ImageViewableResponse({
+    required this.imageId,
     required this.url,
-    required this.expiresAt,
   });
 
   factory ImageViewableResponse.fromMap(Map<String, dynamic> map) {
     return ImageViewableResponse(
-      url: map['url'] ?? '',
-      expiresAt: DateTime.parse(map['expires_at']),
+      imageId: map['image_id'] as int? ?? 0,
+      url: (map['url'] as String?) ?? '',
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'image_id': imageId,
       'url': url,
-      'expires_at': expiresAt.toIso8601String(),
     };
   }
 
   @override
-  String toString() => 'ImageViewableResponse(url: $url, expiresAt: $expiresAt)';
+  String toString() => 'ImageViewableResponse(imageId: $imageId, url: $url)';
 }
 
 /// 이미지 업로드 프로세스의 각 단계
 enum ImageUploadStep {
   thumbnail,  // 썸네일 생성 및 캐시 & 로컬 레포에 정보 저장
-  upload,     // image upload service & callback
-  tagging,    // image automatic tag list get
+  upload,     // image upload service & backend notification
 }
 
 /// 단일 이미지의 업로드 진행 상황

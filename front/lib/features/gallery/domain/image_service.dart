@@ -2,23 +2,20 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import 'package:front/core/network/network_policy_service.dart';
+import 'package:front/features/auth/data/auth_repository.dart';
 
 import '../data/models/photo_models.dart';
 
 // Backend server configuration
 const String _baseUrl = 'http://localhost:8000';
-const String _myImagesEndpoint = '/api/users/users/me/images';
+const String _myImagesEndpoint = '/api/users/me/images';
 const String _imageViewEndpoint = '/api/images';
 const String _trashEndpoint = '/api/images/trash';
 
-// TODO: 실제 인증 토큰을 가져오는 함수로 교체 필요
-String? _getAuthToken() {
-  // 임시로 null 반환. SharedPreferences나 secure storage에서 토큰 가져오기
-  return null;
-}
+final _authRepository = AuthRepository();
 
-Map<String, String> _getAuthHeaders() {
-  final token = _getAuthToken();
+Future<Map<String, String>> _getAuthHeaders() async {
+  final token = await _authRepository.getAccessToken();
   return {
     'Content-Type': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
@@ -45,7 +42,7 @@ Future<List<ImageResponse>> getMyImages() async {
     final uri = Uri.parse('$_baseUrl$_myImagesEndpoint');
     _log('사용자 이미지 목록 조회');
 
-    final response = await http.get(uri, headers: _getAuthHeaders());
+    final response = await http.get(uri, headers: await _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;
@@ -74,7 +71,7 @@ Future<ImageViewableResponse?> getImageViewUrl(int imageId) async {
     final uri = Uri.parse('$_baseUrl$_imageViewEndpoint/$imageId/view');
     _log('이미지 view URL 조회: $imageId');
 
-    final response = await http.get(uri, headers: _getAuthHeaders());
+    final response = await http.get(uri, headers: await _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -104,7 +101,7 @@ Future<List<ImageResponse>> getTrashedImages() async {
     final uri = Uri.parse('$_baseUrl$_trashEndpoint');
     _log('휴지통 이미지 목록 조회');
 
-    final response = await http.get(uri, headers: _getAuthHeaders());
+    final response = await http.get(uri, headers: await _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;

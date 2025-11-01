@@ -11,6 +11,7 @@ import 'thumbnail_service.dart';
 import '../data/repositories/local_photo_repository.dart';
 import '../data/models/photo_models.dart';
 import '../utils/file_hash_calculator.dart';
+import '../utils/image_metadata_extractor.dart';
 
 final ImagePicker _imagePicker = ImagePicker();
 
@@ -111,12 +112,26 @@ Future<Map<String, dynamic>> uploadToPresignedUrl(
       'Presigned URL로 파일 업로드 중: ${path.basename(file.path)} (${fileBytes.length} bytes)',
     );
 
+    final uri = Uri.parse(presignedUrl);
+
+    // AWS S3 Presigned URL 업로드 시:
+    // 1. Presigned URL 생성 시 포함된 헤더만 전송해야 함
+    // 2. Host 헤더는 HTTP 클라이언트가 자동으로 추가하므로 명시하지 않음
+    // 3. Content-Type, Content-Length는 백엔드에서 Presigned URL 생성 시
+    //    서명에 포함시켰는지 확인 필요
+    final headers = <String, String>{};
+
+    // Content-Type만 추가 (일반적으로 S3 업로드에 필요)
+    if (contentType != null) {
+      headers['Content-Type'] = contentType;
+    }
+
+    _log('업로드 헤더: $headers', level: LogLevel.debug);
+    _log('업로드 URL: $presignedUrl', level: LogLevel.debug);
+
     final response = await http.put(
-      Uri.parse(presignedUrl),
-      headers: {
-        'Content-Type': contentType ?? 'application/octet-stream',
-        'Content-Length': fileBytes.length.toString(),
-      },
+      uri,
+      headers: headers,
       body: fileBytes,
     );
 
@@ -249,16 +264,24 @@ Future<List<Map<String, dynamic>>> uploadMultipleFilesWithPresignedUrls(
 
 /// Notifies backend that upload is complete for a specific image
 /// Returns UploadCompleteResponse or throws an exception
-Future<UploadCompleteResponse> notifyUploadComplete(int imageId) async {
+Future<UploadCompleteResponse> notifyUploadComplete(
+  int imageId, {
+  Map<String, dynamic>? metadata,
+}) async {
   try {
     await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_uploadCompleteEndpoint');
     _log('업로드 완료 알림: image_id=$imageId');
 
+    final body = {
+      'image_id': imageId,
+      'metadata': metadata ?? {},
+    };
+
     final response = await http.post(
       uri,
       headers: await _getAuthHeaders(),
-      body: jsonEncode({'image_id': imageId}),
+      body: jsonEncode(body),
     );
 
     if (response.statusCode == 200) {
@@ -639,11 +662,11 @@ Future<Map<String, dynamic>> uploadAndSaveFiles(
         savedPhotos.add(photo);
         _log('로컬 저장 완료: ${photo.id}');
 
-        // 썸네일 단계 완료 알림
-        onStepCompleted?.call(photo.id, ImageUploadStep.thumbnail);
-
-        // 콜백으로 즉시 UI 알림
+        // 콜백으로 즉시 UI 알림 (먼저 호출하여 progress 초기화)
         onPhotoSaved?.call(photo);
+
+        // 썸네일 단계 완료 알림 (progress 초기화 후 호출)
+        onStepCompleted?.call(photo.id, ImageUploadStep.thumbnail);
 
         // 7. 백엔드에 비동기 업로드 (UI 블로킹 없이)
         // presignedUrlData 전달
@@ -708,12 +731,16 @@ Future<void> _uploadToBackendAsyncWithPresignedUrl(
     if (uploadResult['success'] == true) {
       final imageId = presignedData.imageId;
 
-      // 업로드 단계 완료 알림
-      onStepCompleted?.call(photo.id, ImageUploadStep.upload);
-
-      // 2. Notify backend that upload is complete
+      // 2. Extract metadata and notify backend that upload is complete
       try {
-        final completeResponse = await notifyUploadComplete(imageId);
+        // 메타데이터 추출
+        final metadata = await extractImageMetadata(file);
+        final metadataMap = metadata?.toMap();
+
+        final completeResponse = await notifyUploadComplete(
+          imageId,
+          metadata: metadataMap,
+        );
 
         // 3. Update local repository with backend data
         final remoteUrl =
@@ -728,14 +755,14 @@ Future<void> _uploadToBackendAsyncWithPresignedUrl(
         );
         await _localRepo.updateUploadStatus(photo.id, UploadStatus.completed);
 
-        // 태깅 단계 완료 알림 (서버에서 AI 태깅 완료 가정)
-        onStepCompleted?.call(photo.id, ImageUploadStep.tagging);
+        // 업로드 단계 완료 알림 (백엔드 완료 알림 성공 후)
+        onStepCompleted?.call(photo.id, ImageUploadStep.upload);
       } catch (completeError) {
         _log('업로드 완료 알림 실패: ${photo.id} - $completeError', level: LogLevel.warning, error: completeError);
         await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
 
-        // 태깅 단계 실패 알림
-        onStepFailed?.call(photo.id, ImageUploadStep.tagging, '업로드 완료 알림 실패: ${completeError.toString()}');
+        // 업로드 완료 알림 실패
+        onStepFailed?.call(photo.id, ImageUploadStep.upload, '업로드 완료 알림 실패: ${completeError.toString()}');
       }
     } else {
       final error = uploadResult['error'] ?? '알 수 없는 오류';
@@ -802,12 +829,16 @@ Future<void> _uploadToBackendAsync(
     if (uploadResult['success'] == true) {
       final imageId = presignedData.imageId;
 
-      // 업로드 단계 완료 알림
-      onStepCompleted?.call(photo.id, ImageUploadStep.upload);
-
-      // 2. Notify backend that upload is complete
+      // 2. Extract metadata and notify backend that upload is complete
       try {
-        final completeResponse = await notifyUploadComplete(imageId);
+        // 메타데이터 추출
+        final metadata = await extractImageMetadata(file);
+        final metadataMap = metadata?.toMap();
+
+        final completeResponse = await notifyUploadComplete(
+          imageId,
+          metadata: metadataMap,
+        );
 
         // 3. Update local repository with backend data
         final remoteUrl =
@@ -822,14 +853,14 @@ Future<void> _uploadToBackendAsync(
         );
         await _localRepo.updateUploadStatus(photo.id, UploadStatus.completed);
 
-        // 태깅 단계 완료 알림 (서버에서 AI 태깅 완료 가정)
-        onStepCompleted?.call(photo.id, ImageUploadStep.tagging);
+        // 업로드 단계 완료 알림 (백엔드 완료 알림 성공 후)
+        onStepCompleted?.call(photo.id, ImageUploadStep.upload);
       } catch (completeError) {
         _log('업로드 완료 알림 실패: ${photo.id} - $completeError', level: LogLevel.warning, error: completeError);
         await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
 
-        // 태깅 단계 실패 알림
-        onStepFailed?.call(photo.id, ImageUploadStep.tagging, '업로드 완료 알림 실패: ${completeError.toString()}');
+        // 업로드 완료 알림 실패
+        onStepFailed?.call(photo.id, ImageUploadStep.upload, '업로드 완료 알림 실패: ${completeError.toString()}');
       }
     } else {
       final error = uploadResult['error'] ?? '알 수 없는 오류';

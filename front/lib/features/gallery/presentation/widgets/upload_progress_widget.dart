@@ -446,8 +446,6 @@ class _ExpandableUploadProgressState extends State<ExpandableUploadProgress>
         return '썸네일';
       case ImageUploadStep.upload:
         return '업로드';
-      case ImageUploadStep.tagging:
-        return '태깅';
     }
   }
 }

@@ -80,16 +80,23 @@ class UploadStateService extends ChangeNotifier {
 
   /// 특정 이미지의 단계 완료 표시
   void completeImageStep(String photoId, ImageUploadStep step) {
+    print('[UploadStateService] completeImageStep 호출: photoId=$photoId, step=$step');
     final progress = _imageProgressMap[photoId];
     if (progress != null) {
+      print('[UploadStateService] 현재 진행 상황: ${progress.stepCompleted}');
       _imageProgressMap[photoId] = progress.completeStep(step);
+      print('[UploadStateService] 업데이트된 진행 상황: ${_imageProgressMap[photoId]!.stepCompleted}');
 
-      // 모든 단계가 완료되면 완료 목록으로 이동
-      if (_imageProgressMap[photoId]!.isCompleted) {
+      // upload 단계가 완료되면 (마지막 단계) 완료 목록으로 이동
+      if (step == ImageUploadStep.upload) {
+        print('[UploadStateService] upload 단계 완료, 완료 목록으로 이동: $photoId');
         _moveToCompleted(photoId);
       }
 
+      print('[UploadStateService] activeUploads: ${activeUploads.length}, completedUploads: ${completedUploads.length}');
       notifyListeners();
+    } else {
+      print('[UploadStateService] 경고: photoId=$photoId를 _imageProgressMap에서 찾을 수 없습니다');
     }
   }
 
@@ -117,14 +124,19 @@ class UploadStateService extends ChangeNotifier {
 
   /// 완료된 이미지를 완료 목록으로 이동
   void _moveToCompleted(String photoId) {
+    print('[UploadStateService] _moveToCompleted 호출: photoId=$photoId');
     final progress = _imageProgressMap.remove(photoId);
     if (progress != null) {
+      print('[UploadStateService] progress 발견: ${progress.fileName}, isCompleted=${progress.isCompleted}');
       _completedImages.insert(0, progress);
+      print('[UploadStateService] 완료 목록에 추가 완료. completedImages 길이: ${_completedImages.length}');
 
       // 최대 개수 유지
       if (_completedImages.length > _maxCompletedImages) {
         _completedImages.removeRange(_maxCompletedImages, _completedImages.length);
       }
+    } else {
+      print('[UploadStateService] 경고: photoId=$photoId를 _imageProgressMap에서 제거할 수 없습니다');
     }
   }
 

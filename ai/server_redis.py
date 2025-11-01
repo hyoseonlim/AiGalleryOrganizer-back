@@ -14,6 +14,9 @@ from celery import Celery
 from typing import List, Optional, Dict, Any
 
 import torch
+from PIL import Image
+# PIL의 decompression bomb 보호 기능 비활성화 (대용량 이미지 처리 허용)
+Image.MAX_IMAGE_PIXELS = None
 from transformers import MobileViTFeatureExtractor, MobileViTForImageClassification, pipeline
 from PIL import Image
 
@@ -151,8 +154,16 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None, ima
         logger.info(f"📤 Sending result to backend: {api_url}")
         logger.info(f"📊 Analysis Result Summary:")
         logger.info(f"   • Tag: {result_data.get('tag_name', 'N/A')} (probability: {result_data.get('probability', 0):.2f}%)")
-        logger.info(f"   • Category: {result_data.get('category', 'N/A')} (probability: {result_data.get('category_probability', 0):.2f}%)")
-        logger.info(f"   • Quality Score: {result_data.get('quality_score', 'N/A')}")
+        
+        # category_probability가 None일 수 있으므로 안전하게 처리
+        category_prob = result_data.get('category_probability')
+        category_prob_str = f"{category_prob:.2f}%" if category_prob is not None else "N/A"
+        logger.info(f"   • Category: {result_data.get('category', 'N/A')} (probability: {category_prob_str})")
+        
+        quality_score = result_data.get('quality_score')
+        quality_str = f"{quality_score:.4f}" if quality_score is not None else "N/A"
+        logger.info(f"   • Quality Score: {quality_str}")
+        
         logger.info(f"   • Feature Vector size: {len(result_data.get('feature_vector', []))}")
         logger.debug(f"🔍 Full result data: {json.dumps(result_data, indent=2)}")
 

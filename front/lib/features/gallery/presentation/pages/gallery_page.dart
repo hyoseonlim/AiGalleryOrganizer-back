@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:front/features/gallery/domain/upload_service.dart';
 import 'package:front/features/gallery/domain/upload_state_service.dart';
 import 'package:front/features/gallery/domain/photo_selection_service.dart';
+import 'package:front/features/gallery/domain/gallery_service.dart';
 import 'package:front/features/gallery/data/models/photo_models.dart';
 import 'package:front/features/gallery/data/repositories/local_photo_repository.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
@@ -53,15 +54,27 @@ class _GalleryPageState extends State<GalleryPage> {
     _loadPhotos();
   }
 
-  /// Load photos from local repository
+  /// Load photos from backend with local thumbnail cache
   Future<void> _loadPhotos() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final photosByDate = await _localRepo.getPhotosByDate();
-      final allPhotos = await _localRepo.getAllPhotos();
+      // 백엔드에서 이미지 목록 불러오기 + 로컬 캐시 활용
+      final photosByDate = await loadGalleryPhotos(
+        onProgress: (current, total) {
+          // 로딩 진행 상황 표시 (선택적)
+          print('[GalleryPage] 이미지 로드 진행: $current/$total');
+        },
+      );
+
+      // 전체 사진 리스트 생성 (날짜별로 정렬)
+      final allPhotos = <Photo>[];
+      final sortedDates = photosByDate.keys.toList()..sort((a, b) => b.compareTo(a)); // 최신 날짜 우선
+      for (final date in sortedDates) {
+        allPhotos.addAll(photosByDate[date]!);
+      }
 
       setState(() {
         _photosByDate = photosByDate;
