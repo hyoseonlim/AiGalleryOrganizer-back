@@ -17,7 +17,8 @@ class LocalPhotoRepository {
   Directory? _originalPhotosDir;
 
   // Singleton pattern
-  static final LocalPhotoRepository _instance = LocalPhotoRepository._internal();
+  static final LocalPhotoRepository _instance =
+      LocalPhotoRepository._internal();
   factory LocalPhotoRepository() => _instance;
   LocalPhotoRepository._internal() : _cacheService = PhotoCacheService();
 
@@ -56,6 +57,7 @@ class LocalPhotoRepository {
   Future<Photo?> savePhotoMetadata({
     required String fileName,
     required int fileSize,
+    required PhotoMetadata metadata,
     List<int>? thumbnailBytes,
   }) async {
     try {
@@ -80,10 +82,7 @@ class LocalPhotoRepository {
         fileName: fileName,
         createdAt: DateTime.now(),
         fileSize: fileSize,
-        metadata: const PhotoMetadata(
-          systemTags: [],
-          userTags: [],
-        ),
+        metadata: metadata,
         uploadStatus: UploadStatus.pending,
       );
 
@@ -125,7 +124,6 @@ class LocalPhotoRepository {
     }
   }
 
-
   /// 모든 로컬 사진 가져오기
   Future<List<Photo>> getAllPhotos() async {
     try {
@@ -145,7 +143,11 @@ class LocalPhotoRepository {
       }
 
       // 최신순으로 정렬
-      photos.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+      photos.sort(
+        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+          a.createdAt ?? DateTime.now(),
+        ),
+      );
 
       _log('로컬 사진 로드 완료: ${photos.length}개');
 
@@ -187,7 +189,10 @@ class LocalPhotoRepository {
   }
 
   /// 백엔드에서 받은 메타데이터로 사진 업데이트
-  Future<void> updatePhotoMetadata(String photoId, PhotoMetadata metadata) async {
+  Future<void> updatePhotoMetadata(
+    String photoId,
+    PhotoMetadata metadata,
+  ) async {
     try {
       final photo = await _loadPhotoMetadata(photoId);
       if (photo != null) {
@@ -285,7 +290,9 @@ class LocalPhotoRepository {
       final file = File(path.join(_originalPhotosDir!.path, '$photoId.jpg'));
       await file.writeAsBytes(imageBytes);
 
-      _log('원본 이미지 로컬 저장 완료: $photoId (${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)');
+      _log(
+        '원본 이미지 로컬 저장 완료: $photoId (${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
+      );
 
       return file;
     } catch (e) {

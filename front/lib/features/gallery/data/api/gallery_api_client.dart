@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 
 import 'package:front/core/network/network_policy_service.dart';
+import 'package:front/features/auth/data/auth_repository.dart';
 
 import 'models/api_response.dart';
 
@@ -31,9 +32,8 @@ class GalleryApiClient {
   }
 
   /// 인증 토큰 가져오기
-  /// TODO: 실제 인증 토큰을 SharedPreferences나 secure storage에서 가져오도록 구현
   String? _getAuthToken() {
-    return null;
+    return AuthRepository().cachedAccessToken;
   }
 
   /// 공통 헤더 생성 (인증 포함)
@@ -93,6 +93,32 @@ class GalleryApiClient {
       return _handleResponse<T>(response, parser: parser);
     } catch (e) {
       _log('POST 요청 오류: $endpoint', level: _LogLevel.error, error: e);
+      return ApiResponse.fromException(e);
+    }
+  }
+
+  /// PUT 요청 (JSON)
+  Future<ApiResponse<T>> putJson<T>(
+    String endpoint, {
+    Map<String, String>? headers,
+    Map<String, dynamic>? body,
+    T Function(Map<String, dynamic>)? parser,
+  }) async {
+    try {
+      final uri = _buildUri(endpoint);
+      _log('PUT 요청: $uri', level: _LogLevel.debug);
+
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+
+      final response = await _client.put(
+        uri,
+        headers: _getHeaders(additionalHeaders: headers),
+        body: body != null ? jsonEncode(body) : null,
+      );
+
+      return _handleResponse<T>(response, parser: parser);
+    } catch (e) {
+      _log('PUT 요청 오류: $endpoint', level: _LogLevel.error, error: e);
       return ApiResponse.fromException(e);
     }
   }

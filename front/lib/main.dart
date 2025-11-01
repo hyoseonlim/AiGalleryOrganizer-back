@@ -5,6 +5,7 @@ import 'features/shared/presentation/controllers/theme_controller.dart';
 import 'features/shared/presentation/pages/main_scaffold.dart';
 import 'features/gallery/data/cache/photo_cache_service.dart';
 import 'features/gallery/data/repositories/local_photo_repository.dart';
+import 'features/auth/data/auth_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,8 @@ void main() async {
 
   final localPhotoRepo = LocalPhotoRepository();
   await localPhotoRepo.initialize();
+
+  await AuthRepository().initialize();
 
   // Load persisted theme preference before building the app
   final themeController = ThemeController.instance;

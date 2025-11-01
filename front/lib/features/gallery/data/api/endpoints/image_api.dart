@@ -18,9 +18,7 @@ class ImageApi {
   ///   }
   /// ]
   Future<ApiResponse<List<ImageResponse>>> getMyImages({String? userId}) async {
-    final response = await _client.get<List<dynamic>>(
-      '/api/users/users/me/images',
-    );
+    final response = await _client.get<List<dynamic>>('/api/users/me/images');
 
     if (response.success && response.data != null) {
       try {
@@ -50,7 +48,9 @@ class ImageApi {
   ///   "image_id": 0,
   ///   "url": "string"
   /// }
-  Future<ApiResponse<ImageViewableResponse>> getImageViewUrl(int imageId) async {
+  Future<ApiResponse<ImageViewableResponse>> getImageViewUrl(
+    int imageId,
+  ) async {
     final response = await _client.get<ImageViewableResponse>(
       '/api/images/$imageId/view',
       parser: (json) => ImageViewableResponse.fromMap(json),
@@ -58,5 +58,4 @@ class ImageApi {
 
     return response;
   }
-
 }

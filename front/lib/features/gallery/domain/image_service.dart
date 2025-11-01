@@ -7,7 +7,7 @@ import '../data/models/photo_models.dart';
 
 // Backend server configuration
 const String _baseUrl = 'http://localhost:8000';
-const String _myImagesEndpoint = '/api/users/users/me/images';
+const String _myImagesEndpoint = '/api/users/me/images';
 const String _imageViewEndpoint = '/api/images';
 const String _trashEndpoint = '/api/images/trash';
 

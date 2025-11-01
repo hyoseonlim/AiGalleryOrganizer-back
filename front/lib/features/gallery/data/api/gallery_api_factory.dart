@@ -4,6 +4,7 @@ import 'endpoints/image_api.dart';
 import 'endpoints/trash_api.dart';
 import 'endpoints/download_api.dart';
 import 'endpoints/tag_api.dart';
+import 'package:front/features/suggestion/data/suggestion_api.dart';
 
 /// Gallery API 팩토리
 /// 모든 API 엔드포인트에 대한 접근을 제공
@@ -15,6 +16,7 @@ class GalleryApiFactory {
   late final TrashApi trash;
   late final DownloadApi download;
   late final TagApi tag;
+  late final SuggestionApi suggestion;
 
   GalleryApiFactory({String baseUrl = 'http://localhost:8000'})
       : _client = GalleryApiClient(baseUrl: baseUrl) {
@@ -22,7 +24,8 @@ class GalleryApiFactory {
     image = ImageApi(_client);
     trash = TrashApi(_client);
     download = DownloadApi(_client);
-    // tag = TagApi(_client);
+    tag = TagApi(_client);
+    suggestion = SuggestionApi(_client);
   }
 
   /// 싱글톤 인스턴스

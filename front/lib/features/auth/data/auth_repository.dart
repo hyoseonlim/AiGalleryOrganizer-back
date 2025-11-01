@@ -10,6 +10,7 @@ class AuthRepository {
   String? _cachedAccessToken;
   String? _cachedRefreshToken;
   String? _cachedEmail;
+  bool _initialized = false;
 
   AuthRepository._internal();
 
@@ -20,7 +21,18 @@ class AuthRepository {
   }
 
   Future<void> _ensurePrefs() async {
-    _prefs ??= await SharedPreferences.getInstance();
+    if (_prefs == null) {
+      _prefs = await SharedPreferences.getInstance();
+    }
+  }
+
+  Future<void> initialize() async {
+    if (_initialized) return;
+    await _ensurePrefs();
+    _cachedAccessToken = _prefs!.getString(_accessTokenKey);
+    _cachedRefreshToken = _prefs!.getString(_refreshTokenKey);
+    _cachedEmail = _prefs!.getString(_userEmailKey);
+    _initialized = true;
   }
 
   Future<void> saveCredentials({
@@ -28,7 +40,7 @@ class AuthRepository {
     required String refreshToken,
     required String email,
   }) async {
-    await _ensurePrefs();
+    await initialize();
     await _prefs!.setString(_accessTokenKey, accessToken);
     await _prefs!.setString(_refreshTokenKey, refreshToken);
     await _prefs!.setString(_userEmailKey, email);
@@ -39,7 +51,7 @@ class AuthRepository {
   }
 
   Future<void> clear() async {
-    await _ensurePrefs();
+    await initialize();
     await _prefs!.remove(_accessTokenKey);
     await _prefs!.remove(_refreshTokenKey);
     await _prefs!.remove(_userEmailKey);
@@ -53,8 +65,7 @@ class AuthRepository {
     if (_cachedAccessToken != null) {
       return _cachedAccessToken;
     }
-    await _ensurePrefs();
-    _cachedAccessToken = _prefs!.getString(_accessTokenKey);
+    await initialize();
     return _cachedAccessToken;
   }
 
@@ -62,8 +73,7 @@ class AuthRepository {
     if (_cachedRefreshToken != null) {
       return _cachedRefreshToken;
     }
-    await _ensurePrefs();
-    _cachedRefreshToken = _prefs!.getString(_refreshTokenKey);
+    await initialize();
     return _cachedRefreshToken;
   }
 
@@ -71,8 +81,9 @@ class AuthRepository {
     if (_cachedEmail != null) {
       return _cachedEmail;
     }
-    await _ensurePrefs();
-    _cachedEmail = _prefs!.getString(_userEmailKey);
+    await initialize();
     return _cachedEmail;
   }
+
+  String? get cachedAccessToken => _cachedAccessToken;
 }
