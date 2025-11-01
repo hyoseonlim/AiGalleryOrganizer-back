@@ -4,8 +4,6 @@ transformers
 tf-keras
 pillow
 torchvision
-nima
-tensorflow
 huggingface_hub
 open_clip_torch
 opencv-python
