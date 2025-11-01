@@ -1,12 +1,10 @@
 import torch
 import torch.nn as nn
 import timm
-
 from timm.models.vision_transformer import Block
-from swin import SwinTransformer
-from torch import nn
 from einops import rearrange
 
+from swin import SwinTransformer
 
 class TABlock(nn.Module):
     def __init__(self, dim, drop=0.1):
