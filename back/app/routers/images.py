@@ -17,7 +17,7 @@ from app.schemas.image import (
 from app.schemas.tag import ImageTagRequest
 from app.models.user import User
 from app.services.image import ImageService
-from app.tasks import analyze_image_task
+from app.celery_worker import celery_app
 from config.config import settings
 
 router = APIRouter(tags=["images"])
@@ -57,7 +57,14 @@ def notify_upload_complete(
 
     if settings.CLOUDFRONT_DOMAIN:
         full_image_url = f"https://{settings.CLOUDFRONT_DOMAIN}/{updated_image.url}"
-        analyze_image_task.delay(image_id=updated_image.id, image_url=full_image_url)
+        # AI 서버의 Celery worker에게 분석 작업 전송
+        celery_app.send_task(
+            'app.tasks.analyze_image_task',
+            kwargs={
+                'image_url': full_image_url,
+                'image_id': updated_image.id
+            }
+        )
     else:
         # Handle case where CloudFront is not configured, perhaps log a warning
         print("CloudFront domain is not configured, skipping AI analysis task.")
@@ -169,10 +176,11 @@ def receive_analysis_results(
     image_service.update_image_analysis_results(
         db=db,
         image_id=image_id,
-        tag=results.tag,
-        tag_category=results.tag_category,
-        score=results.score,
-        ai_embedding=results.ai_embedding,
+        tag_name=results.tag_name,
+        tag_category=results.category,
+        tag_probability=results.probability,
+        score=results.quality_score,
+        ai_embedding=results.feature_vector,
     )
     return {"message": "Analysis results received and processed successfully."}
 

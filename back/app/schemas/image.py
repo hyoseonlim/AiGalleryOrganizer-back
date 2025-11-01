@@ -56,10 +56,13 @@ class ImageViewableResponse(BaseModel):
 
 
 class ImageAnalysisResult(BaseModel):
-    tag: str
-    tag_category: str
-    score: float = Field(..., ge=0, le=1)
-    ai_embedding: List[float]
+    tag_name: str
+    probability: float
+    category: Optional[str] = None
+    category_probability: Optional[float] = None
+    quality_score: Optional[float] = Field(None, ge=0, le=1)
+    feature_vector: Optional[List[float]] = None
+    image_url: Optional[str] = None
 
 class ImageResponse(BaseModel):
     image_id: int = Field(alias='id')

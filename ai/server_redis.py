@@ -6,17 +6,18 @@ Redis 메시지 큐를 감시하고 분석 후 백엔드로 결과 전송
 
 import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
-
-from celery import Celery
-from typing import List, Optional, Dict, Any
-import torch
-from transformers import MobileViTFeatureExtractor, MobileViTForImageClassification, pipeline
-from PIL import Image
-from urllib.request import urlopen
-import predict_one_image
 import logging
 import requests
 import json
+
+from celery import Celery
+from typing import List, Optional, Dict, Any
+
+import torch
+from transformers import MobileViTFeatureExtractor, MobileViTForImageClassification, pipeline
+from PIL import Image
+
+import predict_one_image
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -35,11 +36,12 @@ app.conf.update(
     accept_content=['json'],
     result_serializer='json',
     timezone='Asia/Seoul',
-    enable_utc=True,
+    enable_utc=False,
     task_track_started=True,
     task_time_limit=300,  # 5분 타임아웃
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=50,
+    broker_connection_retry_on_startup=True,
 )
 
 # 디바이스 설정
@@ -55,7 +57,7 @@ else:
 
 logger.info(f"Using device: {device}")
 
-# 전역 변수 - 모델들
+# 전역 변수 - 모델
 feature_extractor = None
 model = None
 classifier = None
@@ -63,10 +65,10 @@ feature_maps = {}
 target_layer_name = 'dropout'
 
 # 백엔드 API 설정 (환경변수로 설정 가능)
-BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8080/api/ai/result')  # TODO: 실제 API 경로로 변경
+BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8000/api/images/{image_id}/analysis-results')
 
 
-# Feature extraction hook
+# Feature map hook
 def get_features(name):
     def hook(model, input, output):
         if isinstance(output, tuple):
@@ -105,10 +107,10 @@ def load_models():
             device=device_id
         )
 
-        logger.info(f"✅ All models loaded successfully on {device}")
+        logger.info(f"All models loaded successfully on {device}")
 
     except Exception as e:
-        logger.error(f"❌ Error loading models: {e}")
+        logger.error(f"Error loading models: {e}")
         raise
 
 
@@ -120,8 +122,8 @@ def worker_init(self):
     return "Models loaded successfully"
 
 
-# 백엔드로 결과 전송 함수
-def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> bool:
+# 백엔드로 결과 전송
+def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None, image_id: str = None) -> bool:
     """
     분석 결과를 백엔드 API로 전송합니다.
 
@@ -139,11 +141,23 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
         if task_id:
             result_data['task_id'] = task_id
 
-        logger.info(f"Sending result to backend: {BACKEND_API_URL}")
-        logger.debug(f"Result data: {json.dumps(result_data, indent=2)}")
+        # image_id로 URL 동적 생성
+        if image_id:
+            api_url = BACKEND_API_URL.format(image_id=image_id)
+        else:
+            # image_id가 없으면 기본 URL 사용
+            api_url = BACKEND_API_URL.replace('/{image_id}', '')
+
+        logger.info(f"📤 Sending result to backend: {api_url}")
+        logger.info(f"📊 Analysis Result Summary:")
+        logger.info(f"   • Tag: {result_data.get('tag_name', 'N/A')} (probability: {result_data.get('probability', 0):.2f}%)")
+        logger.info(f"   • Category: {result_data.get('category', 'N/A')} (probability: {result_data.get('category_probability', 0):.2f}%)")
+        logger.info(f"   • Quality Score: {result_data.get('quality_score', 'N/A')}")
+        logger.info(f"   • Feature Vector size: {len(result_data.get('feature_vector', []))}")
+        logger.debug(f"🔍 Full result data: {json.dumps(result_data, indent=2)}")
 
         response = requests.post(
-            BACKEND_API_URL,
+            api_url,
             json=result_data,
             headers=headers,
             timeout=30
@@ -151,6 +165,7 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
 
         response.raise_for_status()
         logger.info(f"✅ Result sent successfully. Response: {response.status_code}")
+        logger.info(f"📥 Backend response: {response.text[:200]}{'...' if len(response.text) > 200 else ''}")
         return True
 
     except requests.exceptions.RequestException as e:
@@ -159,11 +174,11 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
 
 
 # 이미지 분석 Celery Task
-@app.task(bind=True, name='vizota_ai.analyze_image')
+@app.task(bind=True, name='app.tasks.analyze_image_task')
 def analyze_image_task(
     self,
     image_url: str,
-    candidate_labels: Optional[List[str]] = None,
+    candidate_labels: Optional[List[str]] = ['Landscape', 'Animal', 'City', 'People', 'Food'],
     image_id: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -183,7 +198,7 @@ def analyze_image_task(
             - category: 추천 상위 태그
             - category_probability: 추천 태그 확률 (%)
             - quality_score: 이미지 품질 점수 (0-1)
-            - feature_vector: 추출된 feature vector (2D array)
+            - feature_vector: 추출된 feature vector (1x640, list type)
     """
     try:
         # 모델이 로드되지 않았다면 로드
@@ -199,7 +214,11 @@ def analyze_image_task(
 
         # 이미지 다운로드
         try:
-            image = Image.open(urlopen(image_url)).convert('RGB')
+            response = requests.get(image_url, verify=False, timeout=30)
+            response.raise_for_status()
+            from io import BytesIO
+            image = Image.open(BytesIO(response.content)).convert('RGB')
+            logger.info(f"✅ Image downloaded successfully: {len(response.content)} bytes")
         except Exception as e:
             error_msg = f"Failed to load image: {str(e)}"
             logger.error(error_msg)
@@ -222,10 +241,12 @@ def analyze_image_task(
                 logger.warning(f"Quality score calculation failed: {e}")
                 quality_score = None
 
-        # Top prediction 추출
+        # Top prediction 추출 (K값 변경을 통해 추천 태그 개수 변경 가능)
         top_probability, top_class_index = torch.topk(logits.softmax(dim=1) * 100, k=1)
 
         class_name = model.config.id2label[top_class_index[0][0].item()]
+        # comma로 구분된 경우 첫 번째 태그만 추출
+        class_name = class_name.split(',')[0].strip()
         probability = top_probability[0][0].item()
 
         # Feature vector 추출
@@ -236,39 +257,45 @@ def analyze_image_task(
             logger.info(f"Feature vector size: {extracted_features.size()}")
 
         # 계층적 분류
-        recommended_tag = None
-        recommended_tag_prob = None
+        recommended_high_tag = None
+        recommended_high_tag_prob = None
 
         if candidate_labels and len(candidate_labels) > 0:
             try:
                 hierar = classifier(class_name, candidate_labels, multi_label=True)
-                recommended_tag = hierar['labels'][0]
-                recommended_tag_prob = hierar['scores'][0] * 100
-                logger.info(f"Recommended tag: {recommended_tag} ({recommended_tag_prob:.2f}%)")
+                recommended_high_tag = hierar['labels'][0]
+                recommended_high_tag_prob = hierar['scores'][0] * 100
+                logger.info(f"Recommended tag: {recommended_high_tag} ({recommended_high_tag_prob:.2f}%)")
             except Exception as e:
                 logger.warning(f"Hierarchical classification failed: {e}")
 
-        # 결과 생성
+        # 백엔드 API 형식에 맞춰 결과 생성 (ImageAnalysisResult 스키마)
         result = {
             'tag_name': class_name,
-            'probability': round(probability, 2),
-            'category': recommended_tag,
-            'category_probability': round(recommended_tag_prob, 2) if recommended_tag_prob else None,
+            'probability': round(probability, 2),  # 태그 예측 확률 (%)
+            'category': recommended_high_tag if recommended_high_tag else 'Unknown',
+            'category_probability': round(recommended_high_tag_prob, 2) if recommended_high_tag_prob else None,
             'quality_score': round(quality_score, 4) if quality_score else None,
-            'feature_vector': feature_vector,
+            'feature_vector': feature_vector[0] if feature_vector else []  # 첫 번째 배치의 임베딩
+        }
+
+        # 추가 메타데이터 (로깅용)
+        result_metadata = {
+            'probability_percent': round(probability, 2),
+            'category_probability': round(recommended_high_tag_prob, 2) if recommended_high_tag_prob else None,
+            'quality_score': round(quality_score, 4) if quality_score else None,
             'image_url': image_url,
         }
 
-        # 추가 메타데이터
         if image_id:
-            result['image_id'] = image_id
+            result_metadata['image_id'] = image_id
         if user_id:
-            result['user_id'] = user_id
+            result_metadata['user_id'] = user_id
 
         logger.info(f"[Task {self.request.id}] Analysis complete: {class_name} ({probability:.2f}%)")
 
         # 백엔드로 결과 전송
-        send_success = send_result_to_backend(result, task_id=self.request.id)
+        send_success = send_result_to_backend(result, task_id=self.request.id, image_id=image_id)
         result['sent_to_backend'] = send_success
 
         return result
@@ -276,18 +303,17 @@ def analyze_image_task(
     except Exception as e:
         logger.error(f"[Task {self.request.id}] Error analyzing image: {e}")
 
-        # 에러 정보를 백엔드로 전송
+        # 에러 정보를 백엔드로 전송 (ImageAnalysisResult 스키마 형식)
         error_result = {
-            'error': str(e),
-            'image_url': image_url,
-            'status': 'failed'
+            'tag_name': 'error',
+            'probability': 0.0,
+            'category': 'Unknown',
+            'category_probability': None,
+            'quality_score': None,
+            'feature_vector': []
         }
-        if image_id:
-            error_result['image_id'] = image_id
-        if user_id:
-            error_result['user_id'] = user_id
 
-        send_result_to_backend(error_result, task_id=self.request.id)
+        send_result_to_backend(error_result, task_id=self.request.id, image_id=image_id)
 
         raise
 

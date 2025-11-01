@@ -1,16 +1,17 @@
 import os
-import torch
-import numpy as np
 import random
 import cv2
 import requests
 
+import torch
+import numpy as np
 from torchvision import transforms
-from maniqa import MANIQA
 from torch.utils.data import DataLoader
-from config import Config
-from inference_process import ToTensor, Normalize
 from tqdm import tqdm
+
+from config import Config
+from maniqa import MANIQA
+from inference_process import ToTensor, Normalize
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -33,7 +34,7 @@ class Image(torch.utils.data.Dataset):
         if hasattr(image_path_or_array, 'convert'):
             from PIL import Image as PILImage
             self.img_name = "pil_image.jpg"
-            pil_img = image_path_or_array.convert('RGB')
+            pil_img = image_path_or_array
             self.img = np.array(pil_img).astype('float32') / 255
             self.img = np.transpose(self.img, (2, 0, 1))
         
@@ -126,7 +127,7 @@ def main(img_input):
         ##########################
         #서버에 올라갈 경우 수정 필요#
         ##########################
-        "ckpt_path": "/Users/relained/Downloads/ckpt_koniq10k.pt",
+        "ckpt_path": "/Users/imhyoseon/해커톤/Team6-Vizota/ai/ckpt_koniq10k.pt",
     })
     
     # data load
@@ -160,7 +161,7 @@ def main(img_input):
             score = net(patch)
             avg_score += score
         
-    return avg_score / config.num_crops
+    return (avg_score / config.num_crops)
 
 
 if __name__ == '__main__':  
