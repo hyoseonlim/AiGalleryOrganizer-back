@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
+import 'package:front/features/auth/data/auth_repository.dart';
 import 'thumbnail_service.dart';
 import '../data/repositories/local_photo_repository.dart';
 import '../data/models/photo_models.dart';
@@ -18,15 +19,10 @@ const String _uploadCompleteEndpoint = '/api/images/upload/complete';
 
 // Local photo repository instance
 final _localRepo = LocalPhotoRepository();
+final _authRepository = AuthRepository();
 
-// TODO: 실제 인증 토큰을 가져오는 함수로 교체 필요
-String? _getAuthToken() {
-  // 임시로 null 반환. SharedPreferences나 secure storage에서 토큰 가져오기
-  return null;
-}
-
-Map<String, String> _getAuthHeaders() {
-  final token = _getAuthToken();
+Future<Map<String, String>> _getAuthHeaders() async {
+  final token = await _authRepository.getAccessToken();
   return {
     'Content-Type': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
@@ -55,10 +51,8 @@ Future<PresignedUrlResponse> requestPresignedUrls(int imageCount) async {
 
     final response = await http.post(
       uri,
-      headers: _getAuthHeaders(),
-      body: jsonEncode({
-        'image_count': imageCount,
-      }),
+      headers: await _getAuthHeaders(),
+      body: jsonEncode({'image_count': imageCount}),
     );
 
     if (response.statusCode == 200) {
@@ -69,15 +63,24 @@ Future<PresignedUrlResponse> requestPresignedUrls(int imageCount) async {
     } else if (response.statusCode == 422) {
       // Validation error
       final errorData = jsonDecode(response.body);
-      final details = (errorData['detail'] as List<dynamic>?)
-          ?.map((e) => ValidationErrorDetail.fromMap(e as Map<String, dynamic>))
-          .toList() ?? [];
+      final details =
+          (errorData['detail'] as List<dynamic>?)
+              ?.map(
+                (e) => ValidationErrorDetail.fromMap(e as Map<String, dynamic>),
+              )
+              .toList() ??
+          [];
 
-      final errorMessages = details.map((d) => '${d.loc.join(".")}: ${d.msg}').join(', ');
+      final errorMessages = details
+          .map((d) => '${d.loc.join(".")}: ${d.msg}')
+          .join(', ');
       _log('Presigned URL 요청 검증 오류: $errorMessages', level: LogLevel.error);
       throw Exception('검증 오류: $errorMessages');
     } else {
-      _log('Presigned URL 요청 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      _log(
+        'Presigned URL 요청 실패 (status: ${response.statusCode})',
+        level: LogLevel.error,
+      );
       throw Exception('Presigned URL 요청 실패: ${response.statusCode}');
     }
   } catch (e) {
@@ -95,7 +98,9 @@ Future<Map<String, dynamic>> uploadToPresignedUrl(
 }) async {
   try {
     final fileBytes = await file.readAsBytes();
-    _log('Presigned URL로 파일 업로드 중: ${path.basename(file.path)} (${fileBytes.length} bytes)');
+    _log(
+      'Presigned URL로 파일 업로드 중: ${path.basename(file.path)} (${fileBytes.length} bytes)',
+    );
 
     final response = await http.put(
       Uri.parse(presignedUrl),
@@ -179,7 +184,11 @@ Future<List<Map<String, dynamic>>> uploadMultipleFilesWithPresignedUrls(
     }
 
     // 2. Upload each file to its presigned URL
-    for (var i = 0; i < files.length && i < presignedResponse.presignedUrls.length; i++) {
+    for (
+      var i = 0;
+      i < files.length && i < presignedResponse.presignedUrls.length;
+      i++
+    ) {
       final file = files[i];
       final presignedData = presignedResponse.presignedUrls[i];
 
@@ -215,29 +224,38 @@ Future<UploadCompleteResponse> notifyUploadComplete(int imageId) async {
 
     final response = await http.post(
       uri,
-      headers: _getAuthHeaders(),
-      body: jsonEncode({
-        'image_id': imageId,
-      }),
+      headers: await _getAuthHeaders(),
+      body: jsonEncode({'image_id': imageId}),
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final completeResponse = UploadCompleteResponse.fromMap(data);
-      _log('업로드 완료 확인: image_id=${completeResponse.imageId}, status=${completeResponse.status}');
+      _log(
+        '업로드 완료 확인: image_id=${completeResponse.imageId}, status=${completeResponse.status}',
+      );
       return completeResponse;
     } else if (response.statusCode == 422) {
       // Validation error
       final errorData = jsonDecode(response.body);
-      final details = (errorData['detail'] as List<dynamic>?)
-          ?.map((e) => ValidationErrorDetail.fromMap(e as Map<String, dynamic>))
-          .toList() ?? [];
+      final details =
+          (errorData['detail'] as List<dynamic>?)
+              ?.map(
+                (e) => ValidationErrorDetail.fromMap(e as Map<String, dynamic>),
+              )
+              .toList() ??
+          [];
 
-      final errorMessages = details.map((d) => '${d.loc.join(".")}: ${d.msg}').join(', ');
+      final errorMessages = details
+          .map((d) => '${d.loc.join(".")}: ${d.msg}')
+          .join(', ');
       _log('업로드 완료 알림 검증 오류: $errorMessages', level: LogLevel.error);
       throw Exception('검증 오류: $errorMessages');
     } else {
-      _log('업로드 완료 알림 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      _log(
+        '업로드 완료 알림 실패 (status: ${response.statusCode})',
+        level: LogLevel.error,
+      );
       throw Exception('업로드 완료 알림 실패: ${response.statusCode}');
     }
   } catch (e) {
@@ -259,7 +277,16 @@ Future<Map<String, dynamic>> pickFile({
     readSequential: true,
   );
 
-  final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic', '.heif'];
+  final imageExtensions = [
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.bmp',
+    '.webp',
+    '.heic',
+    '.heif',
+  ];
 
   if (result != null && result.files.isNotEmpty) {
     final imageFiles = <File>[];
@@ -304,7 +331,10 @@ Future<Map<String, dynamic>> pickFile({
     // Note: Stream files (web platform) are not yet supported with presigned URL flow
     // TODO: Implement stream-based upload for web platform
     if (streamFiles.isNotEmpty) {
-      _log('스트림 파일 ${streamFiles.length}개는 현재 지원되지 않습니다 (웹 플랫폼)', level: LogLevel.warning);
+      _log(
+        '스트림 파일 ${streamFiles.length}개는 현재 지원되지 않습니다 (웹 플랫폼)',
+        level: LogLevel.warning,
+      );
       for (final streamFile in streamFiles) {
         failedFiles.add(streamFile['name'] as String);
         failedCount++;
@@ -349,14 +379,20 @@ Future<Map<String, dynamic>> pickFolder({
 
     try {
       // Find all image files in the directory
-      final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
-      final files = directory
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) {
-        final ext = path.extension(file.path).toLowerCase();
-        return imageExtensions.contains(ext);
-      }).toList();
+      final imageExtensions = [
+        '.jpg',
+        '.jpeg',
+        '.png',
+        '.gif',
+        '.bmp',
+        '.webp',
+      ];
+      final files = directory.listSync(recursive: true).whereType<File>().where(
+        (file) {
+          final ext = path.extension(file.path).toLowerCase();
+          return imageExtensions.contains(ext);
+        },
+      ).toList();
 
       _log('폴더에서 ${files.length}개의 이미지 파일 발견');
 
@@ -415,7 +451,9 @@ Future<Map<String, dynamic>> openGallery({
   if (pickedFiles.isNotEmpty) {
     _log('갤러리에서 ${pickedFiles.length}개의 이미지 선택됨');
 
-    final files = pickedFiles.map((pickedFile) => File(pickedFile.path)).toList();
+    final files = pickedFiles
+        .map((pickedFile) => File(pickedFile.path))
+        .toList();
 
     // Use new uploadAndSaveFiles
     final savedPhotos = await uploadAndSaveFiles(
@@ -540,13 +578,16 @@ Future<void> _uploadToBackendAsync(
         final completeResponse = await notifyUploadComplete(imageId);
 
         // 3. Update local repository with backend data
-        final remoteUrl = '$_baseUrl/api/images/$imageId/view'; // View URL endpoint
+        final remoteUrl =
+            '$_baseUrl/api/images/$imageId/view'; // View URL endpoint
         await _localRepo.updatePhotoFromBackend(
           photoId: photo.id,
           remoteUrl: remoteUrl,
         );
 
-        _log('백엔드 업로드 완료: ${photo.id} -> imageId=$imageId, hash=${completeResponse.hash}');
+        _log(
+          '백엔드 업로드 완료: ${photo.id} -> imageId=$imageId, hash=${completeResponse.hash}',
+        );
         await _localRepo.updateUploadStatus(photo.id, UploadStatus.completed);
 
         // 태깅 단계 완료 알림 (서버에서 AI 태깅 완료 가정)
