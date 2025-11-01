@@ -15,9 +15,10 @@
 - SQLAlchemy 2.0+ - ORM
 
 ### AI/ML
-- PyTorch - 딥러닝 프레임워크
-    - mobilenetv3_small_100.lamb_in1k : 입력된 이미지를 imagenet이 미리 선별한 1000개의 태그 중 정확도가 높은 태그를 출력하는 모델
-    - bart-large-mnli: 위의 mobilenetv3가 출력한 태그와 미리 선별되어 가지고 있는 사용자의 대분류 태그들 간의 정확도를 보여주는 모델
+- PyTorch - 머신러닝 프레임워크
+    - MobileViT: 입력된 이미지를 imagenet이 미리 선별한 1000개의 태그 중 정확도가 높은 태그를 출력하는 모델
+    - bart-large-mnli: 위의 mobilenViT가 출력한 태그와 미리 선별되어 가지고 있는 사용자의 대분류 태그들 간의 정확도를 보여주는 모델
+    - MANIQA: 입력된 이미지의 Quality Score을 계산하는 모델
 
 ### Infrastructure
 - Docker - 컨테이너화
