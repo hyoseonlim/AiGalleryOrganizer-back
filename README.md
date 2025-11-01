@@ -3,7 +3,7 @@
 <br><br>
 
 ## 🔧  Architecture
-<img width="858" height="544" alt="image" src="https://github.com/user-attachments/assets/eb71df81-14e9-433c-bc90-3f714bda26be" />
+<img width="952" height="571" alt="image" src="https://github.com/user-attachments/assets/8d6795b3-85a9-4d8b-8451-964ff73b5bdd" />
 <br><br>
 
 ### Frontend
@@ -26,7 +26,8 @@
 <br><br>
 
 ## ⚒️  ERD
-<img width="1197" height="645" alt="erd" src="https://github.com/user-attachments/assets/fb67aade-057e-489e-8ba1-879309896777" />
+<img width="1288" height="838" alt="image" src="https://github.com/user-attachments/assets/5eb67e83-318f-4a66-8a92-b02587ad3059" />
+
 
 
 
