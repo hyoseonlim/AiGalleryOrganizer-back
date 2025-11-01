@@ -31,7 +31,7 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app/app
-      - ~/.aws:/root/.aws:ro # Mount AWS credentials
+      - ~/.aws:/app/.aws:ro # Mount AWS credentials
     environment:
       - DATABASE_URL=postgresql://vizota_user:vizota_pass@db:5432/vizota_db
       - DEBUG=True
@@ -52,7 +52,7 @@ services:
     container_name: vizota_celery_worker
     volumes:
       - ./app:/app/app
-      - ~/.aws:/root/.aws:ro # Mount AWS credentials
+      - ~/.aws:/app/.aws:ro # Mount AWS credentials
     environment:
       - DATABASE_URL=postgresql://vizota_user:vizota_pass@db:5432/vizota_db
       - DEBUG=True

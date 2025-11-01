@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_distances
 from typing import List
-from app.models import SimilarGroup
+from app.models import SimilarGroup, Image
 from app.repositories.similar_group_repository import SimilarGroupRepository
 
 class SimilarGroupService:
