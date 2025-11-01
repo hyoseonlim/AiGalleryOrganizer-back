@@ -1,40 +1,45 @@
 """
-Vizota AI FastAPI Server
-이미지 태깅 및 품질 평가를 위한 API 서버
+Vizota AI Celery Worker
+이미지 태깅 및 품질 평가를 위한 Celery Worker
+Redis 메시지 큐를 감시하고 분석 후 백엔드로 결과 전송
 """
 
 import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl
-from typing import List, Optional
+from celery import Celery
+from typing import List, Optional, Dict, Any
 import torch
 from transformers import MobileViTFeatureExtractor, MobileViTForImageClassification, pipeline
 from PIL import Image
 from urllib.request import urlopen
 import predict_one_image
 import logging
+import requests
+import json
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# FastAPI 앱 생성
-app = FastAPI(
-    title="Vizota AI API",
-    description="Image Tagging and Quality Assessment API",
-    version="1.0.0"
+# Celery 앱 생성
+app = Celery(
+    'vizota_ai',
+    broker='redis://localhost:6379/0',
+    backend='redis://localhost:6379/0'
 )
 
-# CORS 설정
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Celery 설정
+app.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='Asia/Seoul',
+    enable_utc=True,
+    task_track_started=True,
+    task_time_limit=300,  # 5분 타임아웃
+    worker_prefetch_multiplier=1,
+    worker_max_tasks_per_child=50,
 )
 
 # 디바이스 설정
@@ -57,19 +62,9 @@ classifier = None
 feature_maps = {}
 target_layer_name = 'dropout'
 
-# Response Models
-class ImageAnalysisResponse(BaseModel):
-    tag_name: str
-    probability: float
-    category: Optional[str] = None
-    category_probability: Optional[float] = None
-    quality_score: Optional[float] = None
-    feature_vector: Optional[List[List[float]]] = None
+# 백엔드 API 설정 (환경변수로 설정 가능)
+BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8080/api/ai/result')  # TODO: 실제 API 경로로 변경
 
-class HealthResponse(BaseModel):
-    status: str
-    device: str
-    models_loaded: bool
 
 # Feature extraction hook
 def get_features(name):
@@ -80,20 +75,21 @@ def get_features(name):
             feature_maps[name] = output.detach()
     return hook
 
-# 모델 초기화
-@app.on_event("startup")
-async def load_models():
+
+# 모델 초기화 함수
+def load_models():
+    """Worker 시작 시 모델을 로드합니다."""
     global feature_extractor, model, classifier
-    
+
     logger.info("🚀 Loading AI models...")
-    
+
     try:
         # MobileViT 모델 로드
         feature_extractor = MobileViTFeatureExtractor.from_pretrained("apple/mobilevit-small")
         model = MobileViTForImageClassification.from_pretrained("apple/mobilevit-small")
         model.eval()
         model.to(device)
-        
+
         # Feature extraction hook 설정
         try:
             target_layer = dict(model.named_modules())[target_layer_name]
@@ -101,113 +97,148 @@ async def load_models():
             logger.info("✅ Feature Vector 추출 설정 완료")
         except KeyError:
             logger.warning("⚠️ Feature Vector 추출 설정 실패")
-        
+
         # Zero-shot classification 모델 로드
         classifier = pipeline(
             "zero-shot-classification",
             model="facebook/bart-large-mnli",
             device=device_id
         )
-        
+
         logger.info(f"✅ All models loaded successfully on {device}")
-        
+
     except Exception as e:
         logger.error(f"❌ Error loading models: {e}")
         raise
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("👋 Shutting down Vizota AI API Server...")
 
-# Health Check
-@app.get("/", response_model=HealthResponse)
-async def root():
-    return {
-        "status": "healthy",
-        "device": str(device),
-        "models_loaded": model is not None and classifier is not None
-    }
+# Celery Worker 시작 시 모델 로드
+@app.task(bind=True)
+def worker_init(self):
+    """Worker 초기화 시 모델을 로드합니다."""
+    load_models()
+    return "Models loaded successfully"
 
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    return {
-        "status": "healthy",
-        "device": str(device),
-        "models_loaded": model is not None and classifier is not None
-    }
 
-# 이미지 분석 엔드포인트
-@app.get("/api/analyze-image", response_model=ImageAnalysisResponse)
-async def analyze_image(
-    image_url: str = Query(..., description="S3 image URL to analyze"),
-    candidate_labels: Optional[List[str]] = Query(
-        None,
-        description="Candidate labels for hierarchical classification (e.g., album names)"
-    )
-):
+# 백엔드로 결과 전송 함수
+def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> bool:
     """
-    S3 이미지 URL을 받아서 태그, 품질 점수, 추천 상위 태그를 반환합니다.
-    
-    - **image_url**: 분석할 이미지의 S3 URL
-    - **candidate_labels**: (선택) 계층적 분류를 위한 후보 레이블 목록 (앨범 이름 등)
-    
+    분석 결과를 백엔드 API로 전송합니다.
+
+    Args:
+        result_data: 전송할 결과 데이터
+        task_id: Celery task ID (선택)
+
     Returns:
-        - tag_name: 이미지 분류명
-        - probability: 분류 확률 (%)
-        - category: 추천 상위 태그 (candidate_labels 제공 시)
-        - category_probability: 추천 태그 확률 (%)
-        - quality_score: 이미지 품질 점수 (0-1)
-        - feature_vector: 추출된 feature vector (2D array)
+        bool: 전송 성공 여부
     """
     try:
-        # 모델 로드 확인
+        headers = {'Content-Type': 'application/json'}
+
+        # task_id가 있으면 결과 데이터에 포함
+        if task_id:
+            result_data['task_id'] = task_id
+
+        logger.info(f"Sending result to backend: {BACKEND_API_URL}")
+        logger.debug(f"Result data: {json.dumps(result_data, indent=2)}")
+
+        response = requests.post(
+            BACKEND_API_URL,
+            json=result_data,
+            headers=headers,
+            timeout=30
+        )
+
+        response.raise_for_status()
+        logger.info(f"✅ Result sent successfully. Response: {response.status_code}")
+        return True
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Failed to send result to backend: {e}")
+        return False
+
+
+# 이미지 분석 Celery Task
+@app.task(bind=True, name='vizota_ai.analyze_image')
+def analyze_image_task(
+    self,
+    image_url: str,
+    candidate_labels: Optional[List[str]] = None,
+    image_id: Optional[str] = None,
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Redis 큐로부터 이미지 분석 작업을 수신하고 처리합니다.
+
+    Args:
+        image_url: 분석할 이미지의 S3 URL
+        candidate_labels: (선택) 계층적 분류를 위한 후보 레이블 목록
+        image_id: (선택) 이미지 식별자
+        user_id: (선택) 사용자 식별자
+
+    Returns:
+        Dict: 분석 결과
+            - tag_name: 이미지 분류명
+            - probability: 분류 확률 (%)
+            - category: 추천 상위 태그
+            - category_probability: 추천 태그 확률 (%)
+            - quality_score: 이미지 품질 점수 (0-1)
+            - feature_vector: 추출된 feature vector (2D array)
+    """
+    try:
+        # 모델이 로드되지 않았다면 로드
         if model is None or classifier is None:
-            raise HTTPException(status_code=503, detail="Models not loaded yet")
-        
-        logger.info(f"Analyzing image: {image_url}")
-        
-        # 이미지 다운로드 (한 번만)
+            logger.info("Models not loaded. Loading now...")
+            load_models()
+
+        logger.info(f"[Task {self.request.id}] Analyzing image: {image_url}")
+        if image_id:
+            logger.info(f"Image ID: {image_id}")
+        if user_id:
+            logger.info(f"User ID: {user_id}")
+
+        # 이미지 다운로드
         try:
             image = Image.open(urlopen(image_url)).convert('RGB')
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to load image: {str(e)}")
-        
+            error_msg = f"Failed to load image: {str(e)}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+
         # 이미지 전처리 및 태깅
         inputs = feature_extractor(images=image, return_tensors="pt").to(device)
-        
+
         with torch.no_grad():
             # 태그 예측
             outputs = model(**inputs)
             logits = outputs.logits
-            
-            # 품질 점수 계산 (PIL Image 객체 전달)
+
+            # 품질 점수 계산
             try:
                 quality_score = predict_one_image.main(image)
-                # tensor를 float로 변환
                 if torch.is_tensor(quality_score):
                     quality_score = quality_score.item()
             except Exception as e:
                 logger.warning(f"Quality score calculation failed: {e}")
                 quality_score = None
-        
+
         # Top prediction 추출
         top_probability, top_class_index = torch.topk(logits.softmax(dim=1) * 100, k=1)
-        
+
         class_name = model.config.id2label[top_class_index[0][0].item()]
         probability = top_probability[0][0].item()
-        
+
         # Feature vector 추출
         feature_vector = None
         if target_layer_name in feature_maps:
             extracted_features = feature_maps[target_layer_name]
-            # tensor를 list로 변환 (JSON 직렬화 가능하도록)
             feature_vector = extracted_features.cpu().numpy().tolist()
             logger.info(f"Feature vector size: {extracted_features.size()}")
-        
-        # 계층적 분류 (candidate_labels가 제공된 경우)
+
+        # 계층적 분류
         recommended_tag = None
         recommended_tag_prob = None
-        
+
         if candidate_labels and len(candidate_labels) > 0:
             try:
                 hierar = classifier(class_name, candidate_labels, multi_label=True)
@@ -216,36 +247,53 @@ async def analyze_image(
                 logger.info(f"Recommended tag: {recommended_tag} ({recommended_tag_prob:.2f}%)")
             except Exception as e:
                 logger.warning(f"Hierarchical classification failed: {e}")
-        
-        response = ImageAnalysisResponse(
-            tag_name=class_name,
-            probability=round(probability, 2),
-            category=recommended_tag,
-            category_probability=round(recommended_tag_prob, 2) if recommended_tag_prob else None,
-            quality_score=round(quality_score, 4) if quality_score else None,
-            feature_vector=feature_vector
-        )
-        
-        logger.info(f"Analysis complete: {class_name} ({probability:.2f}%)")
-        return response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error analyzing image: {e}")
-        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
-# 테스트 엔드포인트
-@app.get("/api/test")
-async def test():
-    """
-    테스트용 엔드포인트 - 샘플 이미지로 분석 테스트
-    """
-    test_url = "https://d206helh22e0a3.cloudfront.net/images/brow/combo/combo.png"
-    test_labels = ["travel", "food", "landscape", "portrait"]
-    
-    return await analyze_image(image_url=test_url, candidate_labels=test_labels)
+        # 결과 생성
+        result = {
+            'tag_name': class_name,
+            'probability': round(probability, 2),
+            'category': recommended_tag,
+            'category_probability': round(recommended_tag_prob, 2) if recommended_tag_prob else None,
+            'quality_score': round(quality_score, 4) if quality_score else None,
+            'feature_vector': feature_vector,
+            'image_url': image_url,
+        }
+
+        # 추가 메타데이터
+        if image_id:
+            result['image_id'] = image_id
+        if user_id:
+            result['user_id'] = user_id
+
+        logger.info(f"[Task {self.request.id}] Analysis complete: {class_name} ({probability:.2f}%)")
+
+        # 백엔드로 결과 전송
+        send_success = send_result_to_backend(result, task_id=self.request.id)
+        result['sent_to_backend'] = send_success
+
+        return result
+
+    except Exception as e:
+        logger.error(f"[Task {self.request.id}] Error analyzing image: {e}")
+
+        # 에러 정보를 백엔드로 전송
+        error_result = {
+            'error': str(e),
+            'image_url': image_url,
+            'status': 'failed'
+        }
+        if image_id:
+            error_result['image_id'] = image_id
+        if user_id:
+            error_result['user_id'] = user_id
+
+        send_result_to_backend(error_result, task_id=self.request.id)
+
+        raise
+
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")
+    # Worker 실행 방법:
+    # celery -A server worker --loglevel=info --concurrency=1
+    logger.info("Starting Vizota AI Celery Worker...")
+    logger.info("Run with: celery -A server worker --loglevel=info --concurrency=1")

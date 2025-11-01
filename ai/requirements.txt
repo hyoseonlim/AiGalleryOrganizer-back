@@ -10,6 +10,6 @@ huggingface_hub
 open_clip_torch
 opencv-python
 einops
-fastapi
-uvicorn[standard]
-pydantic
+celery
+redis
+requests
