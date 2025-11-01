@@ -156,7 +156,9 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   void _onSelectionStateChanged() {
-    setState(() {});
+    // 선택 상태만 변경되었으므로 전체 화면 리빌드 불필요
+    // ListenableBuilder가 자동으로 해당 부분만 업데이트
+    // setState를 제거하여 썸네일 갱신 방지
   }
 
   /// Toggle search bar visibility
