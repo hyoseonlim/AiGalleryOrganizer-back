@@ -31,10 +31,11 @@ def request_upload_urls(
 ):
     """
     여러 이미지 업로드를 위한 사전 서명된 URL을 생성합니다.
+    요청 전에 해시를 비교하여 중복된 이미지는 제외합니다.
     """
     return image_service.request_upload_urls(
         s3_client=s3_client,
-        image_count=request.image_count,
+        images_data=request,
         user=current_user
     )
 
@@ -42,7 +43,6 @@ def request_upload_urls(
 @router.post("/upload/complete", response_model=UploadCompleteResponse)
 def notify_upload_complete(
     request: UploadCompleteRequest,
-    s3_client=Depends(get_s3_client),
     image_service: ImageService = Depends(get_image_service),
     current_user: User = Depends(get_current_user),
 ):
@@ -51,7 +51,6 @@ def notify_upload_complete(
     """
     updated_image = image_service.notify_upload_complete(
         image_id=request.image_id,
-        hash=request.hash,
         metadata=request.metadata,
         user=current_user
     )

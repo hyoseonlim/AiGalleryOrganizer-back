@@ -4,15 +4,30 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from app.models.image import AIProcessingStatus
 
-class ImageUploadRequest(BaseModel):
-    image_count: int = Field(..., gt=0, description="업로드할 이미지 수")
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from app.models.image import AIProcessingStatus
 
-class PresignedUrl(BaseModel):
+class ImageHashPayload(BaseModel):
+    client_id: str
+    hash: str
+
+class ImageUploadRequest(BaseModel):
+    images: List[ImageHashPayload]
+
+class UploadInstruction(BaseModel):
+    client_id: str
     image_id: int
     presigned_url: str
 
+class DuplicateInfo(BaseModel):
+    client_id: str
+    existing_image_id: int
+
 class ImageUploadResponse(BaseModel):
-    presigned_urls: List[PresignedUrl]
+    uploads: List[UploadInstruction]
+    duplicates: List[DuplicateInfo]
 
 class ImageMetadata(BaseModel):
     width: int
@@ -26,7 +41,6 @@ class ImageMetadata(BaseModel):
 
 class UploadCompleteRequest(BaseModel):
     image_id: int
-    hash: str
     metadata: ImageMetadata
 
 

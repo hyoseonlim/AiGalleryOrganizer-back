@@ -8,7 +8,14 @@ from botocore.exceptions import ClientError
 from typing import List
 
 from app.repositories.image import ImageRepository
-from app.schemas.image import ImageUploadResponse, PresignedUrl, ImageResponse, ImageMetadata
+from app.schemas.image import (
+    ImageUploadRequest, 
+    ImageUploadResponse, 
+    UploadInstruction, 
+    DuplicateInfo, 
+    ImageResponse, 
+    ImageMetadata
+)
 from app.models.user import User
 from app.models.image import Image, AIProcessingStatus
 from app.repositories.category import CategoryRepository
@@ -26,34 +33,46 @@ class ImageService:
         self.tag_repository = tag_repository
 
     def request_upload_urls(
-        self, *, s3_client, image_count: int, user: User
+        self, *, s3_client, images_data: ImageUploadRequest, user: User
     ) -> ImageUploadResponse:
         if not settings.S3_BUCKET_NAME:
             raise HTTPException(status_code=500, detail="S3 bucket name is not configured.")
 
-        presigned_urls = []
-        try:
-            for _ in range(image_count):
-                object_key = f"images/{user.id}/{uuid.uuid4()}.jpg"
-                
-                new_image = self.repository.create(user_id=user.id, url=object_key, is_saved=False)
+        uploads = []
+        duplicates = []
 
-                url = s3_client.generate_presigned_url(
-                    'put_object',
-                    Params={'Bucket': settings.S3_BUCKET_NAME, 'Key': object_key},
-                    ExpiresIn=3600
-                )
-                presigned_urls.append(PresignedUrl(image_id=new_image.id, presigned_url=url))
+        try:
+            for img_data in images_data.images:
+                existing_image = self.repository.find_by_hash(img_data.hash)
+                if existing_image:
+                    duplicates.append(DuplicateInfo(
+                        client_id=img_data.client_id,
+                        existing_image_id=existing_image.id
+                    ))
+                else:
+                    object_key = f"images/{user.id}/{uuid.uuid4()}.jpg"
+                    new_image = self.repository.create(user_id=user.id, url=object_key, hash=img_data.hash, is_saved=False)
+                    
+                    url = s3_client.generate_presigned_url(
+                        'put_object',
+                        Params={'Bucket': settings.S3_BUCKET_NAME, 'Key': object_key},
+                        ExpiresIn=3600
+                    )
+                    uploads.append(UploadInstruction(
+                        client_id=img_data.client_id,
+                        image_id=new_image.id,
+                        presigned_url=url
+                    ))
             self.repository.db.commit()
         except ClientError as e:
             logger.error(f"Error generating presigned URL: {e}")
             self.repository.db.rollback()
             raise HTTPException(status_code=500, detail="Could not generate upload URL.")
 
-        return ImageUploadResponse(presigned_urls=presigned_urls)
+        return ImageUploadResponse(uploads=uploads, duplicates=duplicates)
 
     def notify_upload_complete(
-        self, *, image_id: int, hash: str, metadata: ImageMetadata, user: User
+        self, *, image_id: int, metadata: ImageMetadata, user: User
     ) -> Image:
         image = self.repository.find_by_id(image_id, user.id)
 
@@ -62,12 +81,7 @@ class ImageService:
         if image.is_saved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image already processed.")
 
-        existing_image = self.repository.find_by_hash(hash)
-        if existing_image:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Identical image already exists (ID: {existing_image.id}).")
-
         update_data = {
-            "hash": hash,
             "size": metadata.file_size,
             "is_saved": True,
             "exif": metadata.model_dump()
