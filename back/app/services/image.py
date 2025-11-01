@@ -181,16 +181,13 @@ class ImageService:
         if not image:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
 
-        # TODO: 임계값 정의 및 적용
-        # - tag_probability가 임계값 이상일 때만 태그 저장
-        # - category_probability가 임계값 이상일 때만 카테고리 연결
-        # 예: TAG_CONFIDENCE_THRESHOLD = 30.0 (%)
-
-        # Handle Category and Tag
-        if tag_category:
+        # 임계값 확인: tag_probability가 임계값 이상일 때만 태그 저장
+        if tag_category and tag_probability >= settings.TAG_CONFIDENCE_THRESHOLD:
             from app.models.category import Category
             from app.models.tag import Tag
             from app.models.association import ImageTag
+
+            logger.info(f"Image {image_id}: 태그 '{tag_name}' 저장 (신뢰도: {tag_probability}%)")
 
             # Category 찾기 또는 생성 (같은 db 세션 사용)
             category = db.query(Category).filter(Category.name == tag_category).first()
@@ -222,6 +219,9 @@ class ImageService:
                     confidence=tag_probability / 100.0  # 백분율을 0-1 범위로 변환
                 )
                 db.add(image_tag)
+        elif tag_category:
+            # 신뢰도가 임계값 미만인 경우
+            logger.info(f"Image {image_id}: 태그 '{tag_name}' 신뢰도 부족으로 저장 안 함 (신뢰도: {tag_probability}%, 임계값: {settings.TAG_CONFIDENCE_THRESHOLD}%)")
 
         # Update Image (같은 db 세션 사용)
         if ai_embedding is not None:

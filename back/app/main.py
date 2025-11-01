@@ -1,15 +1,36 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from app.database import Base, engine
 from app.models import album, association, image, tag, user, category
 from app.routers import users, images, auth, category, tag, similar_group, album # Added album
 from app.celery_worker import celery_app
 from app.initial_data import seed_data # Import seed_data
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("db table creating..")
+    Base.metadata.create_all(bind=engine)
+    print("db table created!")
+
+    # 테이블 생성 후 초기 데이터 삽입
+    seed_data()
+
+    print("🚀 Vizota API Server Started!")
+
+    yield  # 앱 실행
+
+    # Shutdown
+    print("👋 Vizota API Server Shutting Down...")
+
+
 app = FastAPI(
     title="Vizota API",
     description="Team6 Vizota Backend API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS 설정
@@ -42,20 +63,3 @@ app.include_router(category.router, prefix="/api/categories", tags=["categories"
 app.include_router(tag.router, prefix="/api/tags", tags=["tags"])
 app.include_router(similar_group.router, prefix="/api/similar-groups", tags=["similar-groups"])
 app.include_router(album.router, prefix="/api/albums", tags=["albums"])
-
-# Startup/Shutdown 이벤트
-@app.on_event("startup")
-async def startup_event():
-    print("db table creating..")
-    Base.metadata.create_all(bind=engine)
-    print("db table created!")
-    
-    # Run data seeding after tables are created
-    seed_data() 
-    
-    print("🚀 Vizota API Server Started!")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("👋 Vizota API Server Shutting Down...")

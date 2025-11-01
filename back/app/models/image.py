@@ -23,7 +23,7 @@ class Image(Base):
     is_saved = Column(Boolean, default=False, nullable=False)
     uploaded_at = Column(TIMESTAMP(timezone=True), default=func.now(), nullable=False)
     deleted_at = Column(TIMESTAMP(timezone=True), nullable=True)
-    ai_embedding = Column(String) # pgvector의 VECTOR(512) 타입에 해당
+    ai_embedding = Column(String) # pgvector의 VECTOR 타입에 해당
     score = Column(Float, nullable=True)
     exif = Column(JSONB, nullable=True)
     ai_processing_status = Column(Enum(AIProcessingStatus), default=AIProcessingStatus.PENDING)
