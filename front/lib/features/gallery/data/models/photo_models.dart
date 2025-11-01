@@ -4,11 +4,7 @@ class PhotoTag {
   final String name;
   final TagType type;
 
-  const PhotoTag({
-    required this.id,
-    required this.name,
-    required this.type,
-  });
+  const PhotoTag({required this.id, required this.name, required this.type});
 
   factory PhotoTag.fromMap(Map<String, dynamic> map) {
     return PhotoTag(
@@ -22,19 +18,13 @@ class PhotoTag {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'type': type.name,
-    };
+    return {'id': id, 'name': name, 'type': type.name};
   }
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PhotoTag &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
+      other is PhotoTag && runtimeType == other.runtimeType && id == other.id;
 
   @override
   int get hashCode => id.hashCode;
@@ -44,11 +34,10 @@ class PhotoTag {
 }
 
 enum TagType {
-  user,   // 사용자가 추가한 태그
+  user, // 사용자가 추가한 태그
   system, // AI/시스템이 자동으로 생성한 태그
 }
 
-/// Represents photo metadata from backend
 class PhotoMetadata {
   final String? location;
   final String? camera;
@@ -56,6 +45,14 @@ class PhotoMetadata {
   final List<PhotoTag> userTags;
   final List<PhotoTag> systemTags;
   final Map<String, dynamic>? additionalInfo;
+  final int? width;
+  final int? height;
+  final int? fileSize;
+  final DateTime? dateTaken;
+  final String? mimeType;
+  final double? latitude;
+  final double? longitude;
+  final Map<String, dynamic>? exifData;
 
   const PhotoMetadata({
     this.location,
@@ -64,6 +61,14 @@ class PhotoMetadata {
     this.userTags = const [],
     this.systemTags = const [],
     this.additionalInfo,
+    this.width,
+    this.height,
+    this.fileSize,
+    this.dateTaken,
+    this.mimeType,
+    this.latitude,
+    this.longitude,
+    this.exifData,
   });
 
   factory PhotoMetadata.fromMap(Map<String, dynamic>? map) {
@@ -71,13 +76,17 @@ class PhotoMetadata {
       return const PhotoMetadata();
     }
 
-    final userTagsList = (map['userTags'] as List<dynamic>?)
-        ?.map((tag) => PhotoTag.fromMap(tag as Map<String, dynamic>))
-        .toList() ?? [];
+    final userTagsList =
+        (map['userTags'] as List<dynamic>?)
+            ?.map((tag) => PhotoTag.fromMap(tag as Map<String, dynamic>))
+            .toList() ??
+        [];
 
-    final systemTagsList = (map['systemTags'] as List<dynamic>?)
-        ?.map((tag) => PhotoTag.fromMap(tag as Map<String, dynamic>))
-        .toList() ?? [];
+    final systemTagsList =
+        (map['systemTags'] as List<dynamic>?)
+            ?.map((tag) => PhotoTag.fromMap(tag as Map<String, dynamic>))
+            .toList() ??
+        [];
 
     return PhotoMetadata(
       location: map['location'],
@@ -86,6 +95,18 @@ class PhotoMetadata {
       userTags: userTagsList,
       systemTags: systemTagsList,
       additionalInfo: map['additionalInfo'],
+      width: map['width'] ?? map['image_width'],
+      height: map['height'] ?? map['image_height'],
+      fileSize: map['fileSize'] ?? map['file_size'],
+      dateTaken: map['dateTaken'] != null
+          ? DateTime.tryParse(map['dateTaken'])
+          : map['date_taken'] != null
+          ? DateTime.tryParse(map['date_taken'])
+          : null,
+      mimeType: map['mimeType'] ?? map['mime_type'],
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+      exifData: map['exifData'] ?? map['exif_data'],
     );
   }
 
@@ -97,6 +118,14 @@ class PhotoMetadata {
       'userTags': userTags.map((tag) => tag.toMap()).toList(),
       'systemTags': systemTags.map((tag) => tag.toMap()).toList(),
       'additionalInfo': additionalInfo,
+      'width': width,
+      'height': height,
+      'fileSize': fileSize,
+      'dateTaken': dateTaken?.toIso8601String(),
+      'mimeType': mimeType,
+      'latitude': latitude,
+      'longitude': longitude,
+      'exifData': exifData,
     };
   }
 
@@ -107,6 +136,14 @@ class PhotoMetadata {
     List<PhotoTag>? userTags,
     List<PhotoTag>? systemTags,
     Map<String, dynamic>? additionalInfo,
+    int? width,
+    int? height,
+    int? fileSize,
+    DateTime? dateTaken,
+    String? mimeType,
+    double? latitude,
+    double? longitude,
+    Map<String, dynamic>? exifData,
   }) {
     return PhotoMetadata(
       location: location ?? this.location,
@@ -115,23 +152,42 @@ class PhotoMetadata {
       userTags: userTags ?? this.userTags,
       systemTags: systemTags ?? this.systemTags,
       additionalInfo: additionalInfo ?? this.additionalInfo,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      fileSize: fileSize ?? this.fileSize,
+      dateTaken: dateTaken ?? this.dateTaken,
+      mimeType: mimeType ?? this.mimeType,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      exifData: exifData ?? this.exifData,
     );
   }
+
+  Map<String, dynamic> toApiPayload() => {
+    if (width != null) 'width': width,
+    if (height != null) 'height': height,
+    if (fileSize != null) 'file_size': fileSize,
+    if (dateTaken != null) 'date_taken': dateTaken!.toIso8601String(),
+    if (mimeType != null) 'mime_type': mimeType,
+    if (latitude != null) 'latitude': latitude,
+    if (longitude != null) 'longitude': longitude,
+    if (exifData != null) 'exif_data': exifData,
+  };
 
   /// Gets all tags (user + system)
   List<PhotoTag> get allTags => [...userTags, ...systemTags];
 
   @override
   String toString() =>
-      'PhotoMetadata(location: $location, userTags: ${userTags.length}, systemTags: ${systemTags.length})';
+      'PhotoMetadata(width: $width, height: $height, userTags: ${userTags.length}, systemTags: ${systemTags.length})';
 }
 
 /// 업로드 상태
 enum UploadStatus {
-  pending,    // 업로드 대기 중
-  uploading,  // 업로드 중
-  completed,  // 업로드 완료
-  failed,     // 업로드 실패
+  pending, // 업로드 대기 중
+  uploading, // 업로드 중
+  completed, // 업로드 완료
+  failed, // 업로드 실패
 }
 
 /// Represents a single photo/image
@@ -232,16 +288,10 @@ class PhotoSection {
   final String date;
   final int imageCount;
 
-  const PhotoSection({
-    required this.date,
-    required this.imageCount,
-  });
+  const PhotoSection({required this.date, required this.imageCount});
 
   /// Creates a copy of this PhotoSection with the given fields replaced
-  PhotoSection copyWith({
-    String? date,
-    int? imageCount,
-  }) {
+  PhotoSection copyWith({String? date, int? imageCount}) {
     return PhotoSection(
       date: date ?? this.date,
       imageCount: imageCount ?? this.imageCount,
@@ -299,16 +349,19 @@ class UploadResult {
 
 /// Represents a presigned URL for uploading an image
 class PresignedUrlData {
-  final int imageId;
+  final String clientId; // 클라이언트 ID (요청 시 보낸 ID)
+  final int imageId; // 실제 서버 이미지 ID
   final String presignedUrl;
 
   const PresignedUrlData({
+    required this.clientId,
     required this.imageId,
     required this.presignedUrl,
   });
 
   factory PresignedUrlData.fromMap(Map<String, dynamic> map) {
     return PresignedUrlData(
+      clientId: map['client_id'] ?? '',
       imageId: map['image_id'] ?? 0,
       presignedUrl: map['presigned_url'] ?? '',
     );
@@ -316,41 +369,61 @@ class PresignedUrlData {
 
   Map<String, dynamic> toMap() {
     return {
+      'client_id': clientId,
       'image_id': imageId,
       'presigned_url': presignedUrl,
     };
   }
 
   @override
-  String toString() => 'PresignedUrlData(imageId: $imageId, presignedUrl: $presignedUrl)';
+  String toString() =>
+      'PresignedUrlData(clientId: $clientId, imageId: $imageId, presignedUrl: $presignedUrl)';
 }
 
 /// Represents the response from presigned URL request
 class PresignedUrlResponse {
   final List<PresignedUrlData> presignedUrls;
+  final List<DuplicateImageInfo> duplicates; // 중복된 이미지 정보
 
   const PresignedUrlResponse({
     required this.presignedUrls,
+    this.duplicates = const [],
   });
 
   factory PresignedUrlResponse.fromMap(Map<String, dynamic> map) {
-    final urls = (map['presigned_urls'] as List<dynamic>?)
-        ?.map((item) => PresignedUrlData.fromMap(item as Map<String, dynamic>))
-        .toList() ?? [];
+    final urls =
+        (map['uploads'] as List<dynamic>?)
+            ?.map(
+              (item) => PresignedUrlData.fromMap(item as Map<String, dynamic>),
+            )
+            .toList() ??
+        [];
+
+    final duplicatesList =
+        (map['duplicates'] as List<dynamic>?)
+            ?.map(
+              (item) =>
+                  DuplicateImageInfo.fromMap(item as Map<String, dynamic>),
+            )
+            .toList() ??
+        [];
 
     return PresignedUrlResponse(
       presignedUrls: urls,
+      duplicates: duplicatesList,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'presigned_urls': presignedUrls.map((url) => url.toMap()).toList(),
+      'uploads': presignedUrls.map((url) => url.toMap()).toList(),
+      'duplicates': duplicates.map((dup) => dup.toMap()).toList(),
     };
   }
 
   @override
-  String toString() => 'PresignedUrlResponse(presignedUrls: ${presignedUrls.length})';
+  String toString() =>
+      'PresignedUrlResponse(presignedUrls: ${presignedUrls.length}, duplicates: ${duplicates.length})';
 }
 
 /// Represents a validation error detail from API
@@ -374,15 +447,12 @@ class ValidationErrorDetail {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'loc': loc,
-      'msg': msg,
-      'type': type,
-    };
+    return {'loc': loc, 'msg': msg, 'type': type};
   }
 
   @override
-  String toString() => 'ValidationErrorDetail(loc: $loc, msg: $msg, type: $type)';
+  String toString() =>
+      'ValidationErrorDetail(loc: $loc, msg: $msg, type: $type)';
 }
 
 /// Represents the response from upload/complete endpoint
@@ -406,15 +476,12 @@ class UploadCompleteResponse {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'image_id': imageId,
-      'status': status,
-      'hash': hash,
-    };
+    return {'image_id': imageId, 'status': status, 'hash': hash};
   }
 
   @override
-  String toString() => 'UploadCompleteResponse(imageId: $imageId, status: $status, hash: $hash)';
+  String toString() =>
+      'UploadCompleteResponse(imageId: $imageId, status: $status, hash: $hash)';
 }
 
 /// AI 처리 상태
@@ -434,28 +501,83 @@ enum AIProcessingStatus {
   String toApiString() => name.toUpperCase();
 }
 
-/// 백엔드 API 이미지 응답 모델
+/// 이미지 메타데이터 (OpenAPI 스펙)
+class ImageMetadata {
+  final int width;
+  final int height;
+  final int? fileSize;
+  final DateTime? dateTaken;
+  final String? mimeType;
+  final double? latitude;
+  final double? longitude;
+  final Map<String, dynamic>? exifData;
+
+  const ImageMetadata({
+    required this.width,
+    required this.height,
+    this.fileSize,
+    this.dateTaken,
+    this.mimeType,
+    this.latitude,
+    this.longitude,
+    this.exifData,
+  });
+
+  factory ImageMetadata.fromMap(Map<String, dynamic> map) {
+    return ImageMetadata(
+      width: map['width'] as int? ?? 0,
+      height: map['height'] as int? ?? 0,
+      fileSize: map['fileSize'] as int?,
+      dateTaken: map['dateTaken'] != null
+          ? DateTime.parse(map['dateTaken'] as String)
+          : null,
+      mimeType: map['mime_type'] as String?,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+      exifData: map['exifData'] as Map<String, dynamic>?,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'width': width,
+      'height': height,
+      if (fileSize != null) 'fileSize': fileSize,
+      if (dateTaken != null) 'dateTaken': dateTaken!.toIso8601String(),
+      if (mimeType != null) 'mime_type': mimeType,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (exifData != null) 'exifData': exifData,
+    };
+  }
+}
+
+/// 백엔드 API 이미지 응답 모델 (OpenAPI 스펙)
 class ImageResponse {
   final int id;
-  final int userId;
-  final String s3Key;
-  final String hash;
-  final int fileSize;
-  final AIProcessingStatus status;
+  final String? url;  // nullable according to OpenAPI spec
   final DateTime uploadedAt;
+  final AIProcessingStatus status;
+
+  // Extended fields (not in basic response)
+  final int? userId;
+  final String? s3Key;
+  final String? hash;
+  final int? fileSize;
   final DateTime? deletedAt;
   final String? aiDescription;
   final List<String> aiTags;
-  final Map<String, dynamic>? metadata;
+  final ImageMetadata? metadata;
 
   const ImageResponse({
     required this.id,
-    required this.userId,
-    required this.s3Key,
-    required this.hash,
-    required this.fileSize,
-    required this.status,
+    this.url,
     required this.uploadedAt,
+    required this.status,
+    this.userId,
+    this.s3Key,
+    this.hash,
+    this.fileSize,
     this.deletedAt,
     this.aiDescription,
     this.aiTags = const [],
@@ -464,17 +586,28 @@ class ImageResponse {
 
   factory ImageResponse.fromMap(Map<String, dynamic> map) {
     return ImageResponse(
-      id: map['id'] ?? 0,
-      userId: map['user_id'] ?? 0,
-      s3Key: map['s3_key'] ?? '',
-      hash: map['hash'] ?? '',
-      fileSize: map['file_size'] ?? 0,
-      status: AIProcessingStatus.fromString(map['status'] ?? 'PENDING'),
-      uploadedAt: DateTime.parse(map['uploaded_at']),
-      deletedAt: map['deleted_at'] != null ? DateTime.parse(map['deleted_at']) : null,
-      aiDescription: map['ai_description'],
-      aiTags: List<String>.from(map['ai_tags'] ?? []),
-      metadata: map['metadata'],
+      id: map['id'] as int? ?? 0,
+      url: map['url'] as String?,  // nullable
+      uploadedAt: map['uploaded_at'] != null
+          ? DateTime.parse(map['uploaded_at'] as String)
+          : DateTime.now(),
+      status: AIProcessingStatus.fromString(
+        (map['ai_processing_status'] as String?) ??
+        (map['status'] as String?) ??
+        'PENDING'
+      ),
+      userId: map['user_id'] as int?,
+      s3Key: map['s3_key'] as String?,
+      hash: map['hash'] as String?,
+      fileSize: map['file_size'] as int?,
+      deletedAt: map['deleted_at'] != null
+          ? DateTime.parse(map['deleted_at'] as String)
+          : null,
+      aiDescription: map['ai_description'] as String?,
+      aiTags: (map['ai_tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      metadata: map['metadata'] != null
+          ? ImageMetadata.fromMap(map['metadata'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -494,13 +627,12 @@ class ImageResponse {
     };
   }
 
-  /// ImageResponse를 Photo로 변환
   Photo toPhoto({String? viewUrl, String? localThumbnailPath}) {
     return Photo(
       id: id.toString(),
       url: localThumbnailPath ?? viewUrl ?? '',
       remoteUrl: viewUrl,
-      fileName: s3Key.split('/').last,
+      fileName: s3Key?.split('/').last ?? 'unknown',
       createdAt: uploadedAt,
       fileSize: fileSize,
       metadata: PhotoMetadata(
@@ -509,7 +641,7 @@ class ImageResponse {
           name: tag,
           type: TagType.system,
         )).toList(),
-        additionalInfo: metadata,
+        additionalInfo: metadata?.toMap(),
       ),
       uploadStatus: _mapAIStatusToUploadStatus(status),
     );
@@ -529,33 +661,232 @@ class ImageResponse {
   }
 
   @override
-  String toString() => 'ImageResponse(id: $id, s3Key: $s3Key, status: $status)';
+  String toString() => 'ImageResponse(id: $id, url: $url, status: $status)';
 }
 
-/// 이미지 view URL 응답
+/// 이미지 view URL 응답 (OpenAPI 스펙)
 class ImageViewableResponse {
+  final int imageId;
   final String url;
-  final DateTime expiresAt;
 
   const ImageViewableResponse({
+    required this.imageId,
     required this.url,
-    required this.expiresAt,
   });
 
   factory ImageViewableResponse.fromMap(Map<String, dynamic> map) {
     return ImageViewableResponse(
-      url: map['url'] ?? '',
-      expiresAt: DateTime.parse(map['expires_at']),
+      imageId: map['image_id'] as int? ?? 0,
+      url: (map['url'] as String?) ?? '',
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'image_id': imageId,
       'url': url,
-      'expires_at': expiresAt.toIso8601String(),
     };
   }
 
   @override
-  String toString() => 'ImageViewableResponse(url: $url, expiresAt: $expiresAt)';
+  String toString() => 'ImageViewableResponse(imageId: $imageId, url: $url)';
+}
+
+/// 이미지 업로드 프로세스의 각 단계
+enum ImageUploadStep {
+  thumbnail,  // 썸네일 생성 및 캐시 & 로컬 레포에 정보 저장
+  upload,     // image upload service & backend notification
+}
+
+/// 단일 이미지의 업로드 진행 상황
+class ImageUploadProgress {
+  final String photoId;
+  final String fileName;
+  final Map<ImageUploadStep, bool> stepCompleted;
+  final ImageUploadStep? failedStep;
+  final String? errorMessage;
+
+  const ImageUploadProgress({
+    required this.photoId,
+    required this.fileName,
+    required this.stepCompleted,
+    this.failedStep,
+    this.errorMessage,
+  });
+
+  /// 전체 진행률 (0.0 ~ 1.0)
+  double get progress {
+    final completedCount = stepCompleted.values.where((v) => v).length;
+    return completedCount / ImageUploadStep.values.length;
+  }
+
+  /// 모든 단계 완료 여부
+  bool get isCompleted =>
+      stepCompleted.values.every((v) => v) && failedStep == null;
+
+  /// 실패 여부
+  bool get isFailed => failedStep != null;
+
+  /// 현재 진행 중인 단계
+  ImageUploadStep? get currentStep {
+    if (failedStep != null) return failedStep;
+    for (final step in ImageUploadStep.values) {
+      if (!stepCompleted[step]!) {
+        return step;
+      }
+    }
+    return null;
+  }
+
+  /// 단계 완료 표시
+  ImageUploadProgress completeStep(ImageUploadStep step) {
+    final newSteps = Map<ImageUploadStep, bool>.from(stepCompleted);
+    newSteps[step] = true;
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: newSteps,
+      failedStep: null,
+      errorMessage: null,
+    );
+  }
+
+  /// 단계 실패 표시
+  ImageUploadProgress failStep(ImageUploadStep step, String error) {
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: stepCompleted,
+      failedStep: step,
+      errorMessage: error,
+    );
+  }
+
+  /// 재시도를 위해 실패 상태 초기화
+  ImageUploadProgress resetFailure() {
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: stepCompleted,
+      failedStep: null,
+      errorMessage: null,
+    );
+  }
+
+  factory ImageUploadProgress.initial({
+    required String photoId,
+    required String fileName,
+  }) {
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: {for (var step in ImageUploadStep.values) step: false},
+    );
+  }
+
+  ImageUploadProgress copyWith({
+    String? photoId,
+    String? fileName,
+    Map<ImageUploadStep, bool>? stepCompleted,
+    ImageUploadStep? failedStep,
+    String? errorMessage,
+  }) {
+    return ImageUploadProgress(
+      photoId: photoId ?? this.photoId,
+      fileName: fileName ?? this.fileName,
+      stepCompleted: stepCompleted ?? this.stepCompleted,
+      failedStep: failedStep,
+      errorMessage: errorMessage,
+    );
+  }
+
+  @override
+  String toString() =>
+      'ImageUploadProgress(photoId: $photoId, fileName: $fileName, progress: ${(progress * 100).toStringAsFixed(0)}%, failed: $isFailed)';
+}
+
+/// 중복 검사 요청 데이터
+class DuplicateCheckItem {
+  final int tempId; // 임시 ID (0부터 시작)
+  final String hash; // 이미지 파일 해시값
+
+  const DuplicateCheckItem({required this.tempId, required this.hash});
+
+  Map<String, dynamic> toMap() {
+    return {'client_id': tempId.toString(), 'hash': hash};
+  }
+
+  @override
+  String toString() => 'DuplicateCheckItem(tempId: $tempId, hash: $hash)';
+}
+
+/// 중복 검사 요청 모델
+class DuplicateCheckRequest {
+  final List<DuplicateCheckItem> images;
+
+  const DuplicateCheckRequest({required this.images});
+
+  Map<String, dynamic> toMap() {
+    return {'images': images.map((item) => item.toMap()).toList()};
+  }
+
+  @override
+  String toString() => 'DuplicateCheckRequest(images: ${images.length})';
+}
+
+/// 중복 이미지 응답 데이터
+class DuplicateImageInfo {
+  final String clientId; // 클라이언트 ID
+  final int existingImageId; // 기존 이미지의 실제 ID
+
+  const DuplicateImageInfo({
+    required this.clientId,
+    required this.existingImageId,
+  });
+
+  factory DuplicateImageInfo.fromMap(Map<String, dynamic> map) {
+    return DuplicateImageInfo(
+      clientId: map['client_id'] ?? '',
+      existingImageId: map['existing_image_id'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {'client_id': clientId, 'existing_image_id': existingImageId};
+  }
+
+  // tempId를 int로 파싱하는 getter (내부 로직용)
+  int get tempId => int.tryParse(clientId) ?? 0;
+
+  @override
+  String toString() =>
+      'DuplicateImageInfo(clientId: $clientId, existingImageId: $existingImageId)';
+}
+
+/// 중복 검사 응답 모델
+class DuplicateCheckResponse {
+  final List<DuplicateImageInfo> duplicates;
+
+  const DuplicateCheckResponse({required this.duplicates});
+
+  factory DuplicateCheckResponse.fromMap(Map<String, dynamic> map) {
+    final duplicatesList =
+        (map['duplicates'] as List<dynamic>?)
+            ?.map(
+              (item) =>
+                  DuplicateImageInfo.fromMap(item as Map<String, dynamic>),
+            )
+            .toList() ??
+        [];
+
+    return DuplicateCheckResponse(duplicates: duplicatesList);
+  }
+
+  Map<String, dynamic> toMap() {
+    return {'duplicates': duplicates.map((item) => item.toMap()).toList()};
+  }
+
+  @override
+  String toString() =>
+      'DuplicateCheckResponse(duplicates: ${duplicates.length})';
 }

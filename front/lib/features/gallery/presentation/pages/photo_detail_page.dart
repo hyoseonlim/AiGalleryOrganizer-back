@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:front/core/network/network_policy_service.dart';
 import '../../data/models/photo_models.dart';
 import '../../data/repositories/local_photo_repository.dart';
 import '../../di/gallery_service_locator.dart';
@@ -114,9 +115,9 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('사진이 삭제되었습니다')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('사진이 삭제되었습니다')));
         }
       } else {
         if (mounted) {
@@ -139,9 +140,9 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
     // await sharePhoto(photo.id, photo.url);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('공유 기능은 준비중입니다')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('공유 기능은 준비중입니다')));
     }
   }
 
@@ -153,9 +154,9 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
     final localFile = await _localRepo.getOriginalPhoto(photo.id);
     if (localFile != null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('이미 다운로드된 사진입니다')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('이미 다운로드된 사진입니다')));
       }
       return;
     }
@@ -182,7 +183,10 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
               SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
               ),
               SizedBox(width: 16),
               Text('원본 이미지 다운로드 중...'),
@@ -195,6 +199,7 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
 
     try {
       // 원격에서 다운로드
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
       final response = await http.get(Uri.parse(photo.remoteUrl!));
 
       if (response.statusCode == 200) {
@@ -219,10 +224,7 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('다운로드 실패: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('다운로드 실패: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -236,10 +238,8 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => PhotoMetadataBottomSheet(
-        photo: photo,
-        stateService: _stateService,
-      ),
+      builder: (context) =>
+          PhotoMetadataBottomSheet(photo: photo, stateService: _stateService),
     );
   }
 
@@ -248,19 +248,13 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
-      appBar: PhotoDetailAppBar(
-        onBack: _onBack,
-        stateService: _stateService,
-      ),
+      appBar: PhotoDetailAppBar(onBack: _onBack, stateService: _stateService),
       body: ListenableBuilder(
         listenable: _stateService,
         builder: (context, child) {
           if (_stateService.photos.isEmpty) {
             return const Center(
-              child: Text(
-                '사진이 없습니다',
-                style: TextStyle(color: Colors.white),
-              ),
+              child: Text('사진이 없습니다', style: TextStyle(color: Colors.white)),
             );
           }
 

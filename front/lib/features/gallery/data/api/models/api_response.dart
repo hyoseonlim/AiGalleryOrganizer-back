@@ -1,74 +1,49 @@
-/// API 응답을 감싸는 기본 래퍼 클래스
+/// Generic API response wrapper
 class ApiResponse<T> {
-  final bool success;
   final T? data;
   final String? error;
-  final String? message;
+  final bool success;
   final int? statusCode;
 
   const ApiResponse({
-    required this.success,
     this.data,
     this.error,
-    this.message,
+    required this.success,
     this.statusCode,
   });
 
-  /// 성공 응답 생성
+  /// Success response
   factory ApiResponse.success({
     required T data,
-    String? message,
     int? statusCode,
   }) {
     return ApiResponse(
-      success: true,
       data: data,
-      message: message,
+      success: true,
       statusCode: statusCode,
     );
   }
 
-  /// 실패 응답 생성
+  /// Error/Failure response
   factory ApiResponse.failure({
     required String error,
-    String? message,
     int? statusCode,
   }) {
     return ApiResponse(
-      success: false,
       error: error,
-      message: message,
-      statusCode: statusCode,
-    );
-  }
-
-  /// 예외로부터 실패 응답 생성
-  factory ApiResponse.fromException(Object exception, {int? statusCode}) {
-    return ApiResponse(
       success: false,
-      error: exception.toString(),
       statusCode: statusCode,
     );
   }
-}
 
-/// API 예외 클래스
-class ApiException implements Exception {
-  final String message;
-  final int? statusCode;
-  final dynamic originalError;
+  /// Error response (alias for failure)
+  factory ApiResponse.error(String error) {
+    return ApiResponse.failure(error: error);
+  }
 
-  const ApiException({
-    required this.message,
-    this.statusCode,
-    this.originalError,
-  });
+  /// Check if response has data
+  bool get hasData => data != null;
 
   @override
-  String toString() {
-    if (statusCode != null) {
-      return 'ApiException (status: $statusCode): $message';
-    }
-    return 'ApiException: $message';
-  }
+  String toString() => 'ApiResponse(success: $success, statusCode: $statusCode, error: $error, hasData: $hasData)';
 }

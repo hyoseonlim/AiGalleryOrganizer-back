@@ -1,12 +1,16 @@
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:front/core/network/network_policy_service.dart';
+
 import '../data/models/photo_models.dart';
 import '../data/cache/photo_cache_service.dart';
 
 // Backend server configuration
-const String _baseUrl = 'https://your-backend-api.com'; // TODO: Replace with actual backend URL
-const String _photoEndpoint = '/api/v1/photos';        // TODO: Replace with actual endpoint
+const String _baseUrl =
+    'https://your-backend-api.com'; // TODO: Replace with actual backend URL
+const String _photoEndpoint =
+    '/api/v1/photos'; // TODO: Replace with actual endpoint
 
 // Logging configuration
 enum LogLevel { debug, info, warning, error }
@@ -22,7 +26,10 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
 }
 
 /// Fetches a single photo's detailed information from backend with caching
-Future<Photo?> fetchPhotoDetail(String photoId, {bool forceRefresh = false}) async {
+Future<Photo?> fetchPhotoDetail(
+  String photoId, {
+  bool forceRefresh = false,
+}) async {
   final cacheService = PhotoCacheService();
 
   try {
@@ -39,6 +46,7 @@ Future<Photo?> fetchPhotoDetail(String photoId, {bool forceRefresh = false}) asy
 
     final uri = Uri.parse('$_baseUrl$_photoEndpoint/$photoId');
 
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     _log('사진 상세정보 요청: $photoId');
 
     final response = await http.get(
@@ -60,8 +68,10 @@ Future<Photo?> fetchPhotoDetail(String photoId, {bool forceRefresh = false}) asy
       _log('사진 상세정보 로드 성공: $photoId', level: LogLevel.info);
       return photo;
     } else {
-      _log('사진 상세정보 로드 실패 (상태 코드: ${response.statusCode}): $photoId',
-          level: LogLevel.warning);
+      _log(
+        '사진 상세정보 로드 실패 (상태 코드: ${response.statusCode}): $photoId',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {
@@ -92,6 +102,7 @@ Future<PhotoMetadata?> fetchPhotoMetadataWithCache(
 
     final uri = Uri.parse('$_baseUrl$_photoEndpoint/$photoId/metadata');
 
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final response = await http.get(
       uri,
       headers: {
@@ -111,8 +122,10 @@ Future<PhotoMetadata?> fetchPhotoMetadataWithCache(
       _log('메타데이터 로드 및 캐싱 성공: $photoId', level: LogLevel.info);
       return metadata;
     } else {
-      _log('메타데이터 로드 실패 (상태 코드: ${response.statusCode}): $photoId',
-          level: LogLevel.warning);
+      _log(
+        '메타데이터 로드 실패 (상태 코드: ${response.statusCode}): $photoId',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {
@@ -126,6 +139,7 @@ Future<List<Photo>?> fetchPhotoList() async {
   try {
     final uri = Uri.parse('$_baseUrl$_photoEndpoint');
 
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     _log('사진 목록 요청');
 
     final response = await http.get(
@@ -143,8 +157,10 @@ Future<List<Photo>?> fetchPhotoList() async {
       _log('사진 목록 로드 성공: ${photos.length}개', level: LogLevel.info);
       return photos;
     } else {
-      _log('사진 목록 로드 실패 (상태 코드: ${response.statusCode})',
-          level: LogLevel.warning);
+      _log(
+        '사진 목록 로드 실패 (상태 코드: ${response.statusCode})',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {

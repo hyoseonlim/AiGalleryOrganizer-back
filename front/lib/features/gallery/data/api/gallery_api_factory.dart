@@ -1,36 +1,44 @@
 import 'gallery_api_client.dart';
-import 'endpoints/upload_api.dart';
 import 'endpoints/image_api.dart';
 import 'endpoints/trash_api.dart';
-import 'endpoints/download_api.dart';
-import 'endpoints/tag_api.dart';
 
-/// Gallery API 팩토리
-/// 모든 API 엔드포인트에 대한 접근을 제공
+/// Factory for creating gallery API instances
 class GalleryApiFactory {
+  GalleryApiFactory._({
+    required String baseUrl,
+  }) : _client = GalleryApiClient(baseUrl: baseUrl) {
+    _image = ImageApi(_client);
+    _trash = TrashApi(_client);
+  }
+
+  static GalleryApiFactory? _instance;
+
+  /// Singleton instance
+  static GalleryApiFactory get instance {
+    _instance ??= GalleryApiFactory._(
+      baseUrl: const String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'http://localhost:8000',
+      ),
+    );
+    return _instance!;
+  }
+
+  /// Initialize with custom base URL (for testing)
+  static void initialize(String baseUrl) {
+    _instance = GalleryApiFactory._(baseUrl: baseUrl);
+  }
+
   final GalleryApiClient _client;
+  late final ImageApi _image;
+  late final TrashApi _trash;
 
-  late final UploadApi upload;
-  late final ImageApi image;
-  late final TrashApi trash;
-  late final DownloadApi download;
-  late final TagApi tag;
+  /// Access to image API
+  ImageApi get image => _image;
 
-  GalleryApiFactory({String baseUrl = 'http://localhost:8000'})
-      : _client = GalleryApiClient(baseUrl: baseUrl) {
-    upload = UploadApi(_client);
-    image = ImageApi(_client);
-    trash = TrashApi(_client);
-    download = DownloadApi(_client);
-  }
+  /// Access to trash API
+  TrashApi get trash => _trash;
 
-  /// 싱글톤 인스턴스
-  static final GalleryApiFactory _instance = GalleryApiFactory();
-
-  static GalleryApiFactory get instance => _instance;
-
-  /// 클라이언트 종료
-  void dispose() {
-    _client.dispose();
-  }
+  /// Access to base client
+  GalleryApiClient get client => _client;
 }

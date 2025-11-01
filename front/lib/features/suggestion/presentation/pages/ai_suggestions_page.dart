@@ -1,120 +1,321 @@
 import 'package:flutter/material.dart';
+import 'package:front/api/vizota_api.dart';
+import '../../domain/suggestion_service.dart';
 
-class AiSuggestionsPage extends StatelessWidget {
+class AiSuggestionsPage extends StatefulWidget {
   const AiSuggestionsPage({super.key});
+
+  @override
+  State<AiSuggestionsPage> createState() => _AiSuggestionsPageState();
+}
+
+class _AiSuggestionsPageState extends State<AiSuggestionsPage> {
+  final _suggestionService = SuggestionService();
+
+  List<SimilarGroupResponse>? _groups;
+  Map<int, List<ImageResponse>> _groupImages = {};
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSuggestions();
+  }
+
+  Future<void> _loadSuggestions() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final groups = await _suggestionService.getSuggestedGroups();
+      setState(() {
+        _groups = groups;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = '제안을 불러오는데 실패했습니다: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadGroupImages(int groupId) async {
+    if (_groupImages.containsKey(groupId)) return;
+
+    try {
+      final images = await _suggestionService.getImagesForGroup(groupId);
+      setState(() {
+        _groupImages[groupId] = images;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('이미지를 불러오는데 실패했습니다: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleConfirmBest(int groupId) async {
+    try {
+      await _suggestionService.confirmBestImage(groupId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('대표 이미지만 남기고 삭제했습니다')),
+        );
+        _loadSuggestions();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('삭제 실패: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleReject(int groupId) async {
+    try {
+      await _suggestionService.rejectSuggestion(groupId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('제안을 무시했습니다')),
+        );
+        _loadSuggestions();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('실패: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('AI 정리 제안'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          _buildSummaryCard(),
-          const SizedBox(height: 24),
-          _buildSuggestionGroup(
-            title: '중복 사진',
-            subtitle: '5그룹, 15장',
-            savingSize: '15 MB 절약 가능',
-            imageCount: 3,
-            isDuplicate: true,
-          ),
-          const SizedBox(height: 24),
-          _buildSuggestionGroup(
-            title: '유사한 사진 그룹',
-            subtitle: '8그룹, 24장',
-            albumTitle: '제주도 여행',
-            tagString: '#바다 #여행 #여름',
-            imageCount: 4,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _loadSuggestions,
           ),
         ],
+      ),
+      body: _buildBody(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isLoading ? null : _scanForSimilarImages,
+        icon: const Icon(Icons.search),
+        label: const Text('유사 이미지 찾기'),
       ),
     );
   }
 
+  Future<void> _scanForSimilarImages() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _suggestionService.findAndGroupImages();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('유사 이미지 그룹을 찾았습니다')),
+        );
+        _loadSuggestions();
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('스캔 실패: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildBody() {
+    if (_isLoading && _groups == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage!),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadSuggestions,
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_groups == null || _groups!.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              '제안된 그룹이 없습니다',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '하단의 버튼을 눌러 유사 이미지를 검색하세요',
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16.0),
+      children: [
+        _buildSummaryCard(),
+        const SizedBox(height: 24),
+        ..._groups!.map((group) => Padding(
+          padding: const EdgeInsets.only(bottom: 24.0),
+          child: _buildSuggestionGroup(group),
+        )),
+      ],
+    );
+  }
+
   Widget _buildSummaryCard() {
+    final totalGroups = _groups?.length ?? 0;
+    final totalImages = _groups?.fold<int>(0, (sum, g) => sum + g.imageCount) ?? 0;
+
     return Card(
       color: Colors.blue.shade50,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: const Padding(
-        padding: EdgeInsets.all(20.0),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('절약 가능: 125 MB', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
-            SizedBox(height: 8),
-            Text('45장의 정리 가능한 사진 발견', style: TextStyle(fontSize: 14, color: Colors.black87)),
+            Text(
+              '$totalGroups개 그룹 발견',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$totalImages장의 유사한 사진',
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSuggestionGroup({
-    required String title,
-    required String subtitle,
-    String? savingSize,
-    String? albumTitle,
-    String? tagString,
-    required int imageCount,
-    bool isDuplicate = false,
-  }) {
+  Widget _buildSuggestionGroup(SimilarGroupResponse group) {
+    final images = _groupImages[group.id];
+
+    // 처음 보이면 이미지 로드
+    if (images == null) {
+      _loadGroupImages(group.id);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(isDuplicate ? Icons.copy : Icons.photo_library_outlined, color: Colors.orangeAccent, size: 20),
+            const Icon(Icons.photo_library_outlined, color: Colors.orangeAccent, size: 20),
             const SizedBox(width: 8),
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              '유사 그룹 #${group.id}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         Padding(
           padding: const EdgeInsets.only(left: 28, top: 4, bottom: 12),
-          child: Text(subtitle, style: const TextStyle(color: Colors.grey)),
+          child: Text(
+            '${group.imageCount}장의 유사한 사진',
+            style: const TextStyle(color: Colors.grey),
+          ),
         ),
         SizedBox(
           height: 100,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: imageCount,
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              return AspectRatio(
-                aspectRatio: 1,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+          child: images == null
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: images.length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final image = images[index];
+                    return AspectRatio(
+                      aspectRatio: 1,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: image.url != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  image.url!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Icon(Icons.broken_image, color: Colors.grey[600]),
+                                    );
+                                  },
+                                ),
+                              )
+                            : Center(
+                                child: Icon(Icons.image, color: Colors.grey[600]),
+                              ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
-        if (albumTitle != null)
+        if (group.bestImageId != null)
           Padding(
-            padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
-            child: Text(albumTitle, style: const TextStyle(fontWeight: FontWeight.w600)),
+            padding: const EdgeInsets.only(top: 12.0),
+            child: Text(
+              '대표 이미지: #${group.bestImageId}',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
           ),
-        if (tagString != null)
-          Text(tagString, style: const TextStyle(color: Colors.grey)),
         const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: () {},
-                child: Text(isDuplicate ? '모두 삭제' : '앨범 저장'),
+                onPressed: () => _handleConfirmBest(group.id),
+                child: const Text('대표만 남기기'),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: TextButton(
-                onPressed: () {},
+                onPressed: () => _handleReject(group.id),
                 child: const Text('무시', style: TextStyle(color: Colors.grey)),
               ),
             ),
