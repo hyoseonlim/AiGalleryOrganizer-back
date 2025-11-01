@@ -186,7 +186,7 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
 def analyze_image_task(
     self,
     image_url: str,
-    candidate_labels: Optional[List[str]] = None,
+    candidate_labels: Optional[List[str]] = ['Landscape', 'Animal', 'City', 'People', 'Food'],
     image_id: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
