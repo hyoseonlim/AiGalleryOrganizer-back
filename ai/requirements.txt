@@ -1,4 +1,5 @@
 timm
+tqdm
 torch
 transformers
 tf-keras

@@ -9,6 +9,7 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 import logging
 import requests
 import json
+from urllib.request import urlopen
 
 from celery import Celery
 from typing import List, Optional, Dict, Any
@@ -16,7 +17,6 @@ from typing import List, Optional, Dict, Any
 import torch
 from transformers import MobileViTFeatureExtractor, MobileViTForImageClassification, pipeline
 from PIL import Image
-from urllib.request import urlopen
 
 import predict_one_image
 
