@@ -1,15 +1,9 @@
 # back/app/models/album.py
-from sqlalchemy import Column, Integer, String, TIMESTAMP, Text, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, TIMESTAMP, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
-import enum
-
-class AlbumType(enum.Enum):
-    TRAVEL = "TRAVEL"
-    PERSON = "PERSON"
-    FOOD = "FOOD"
-    CUSTOM = "CUSTOM"
+from sqlalchemy import Boolean
 
 class Album(Base):
     __tablename__ = "albums"
@@ -18,7 +12,7 @@ class Album(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     cover_image_id = Column(Integer, ForeignKey("images.image_id"), nullable=True)
     name = Column(String, nullable=False)
-    type = Column(Enum(AlbumType), nullable=False)
+    is_user_created = Column(Boolean, nullable=False, default=True)
     description = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=func.now())
 

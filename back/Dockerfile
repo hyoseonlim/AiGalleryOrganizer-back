@@ -4,8 +4,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
+# Create a non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin -c "Docker image user" appuser
+
+# Install build dependencies and postgresql-client
+RUN apt-get update && apt-get install -y build-essential postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files and install dependencies first
 COPY pyproject.toml uv.lock ./
@@ -16,6 +19,12 @@ COPY . .
 
 # Make the entrypoint script executable
 RUN chmod +x ./entrypoint.sh
+
+# Change ownership of the app directory
+RUN chown -R appuser:appgroup /app
+
+# Switch to the non-root user
+USER appuser
 
 EXPOSE 8000
 
