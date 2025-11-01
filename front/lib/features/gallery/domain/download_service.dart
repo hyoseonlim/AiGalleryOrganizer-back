@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
+import 'package:front/core/network/network_policy_service.dart';
+
 import '../data/cache/photo_cache_service.dart';
 import '../data/models/photo_models.dart';
 
@@ -40,14 +42,12 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
 /// Get a publicly viewable URL for a completed image
 Future<ImageViewableResponse?> getImageViewUrl(int imageId) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_imageViewEndpoint/$imageId/view');
 
     _log('이미지 view URL 조회: $imageId');
 
-    final response = await http.get(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.get(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -58,8 +58,10 @@ Future<ImageViewableResponse?> getImageViewUrl(int imageId) async {
       _log('이미지를 찾을 수 없음: $imageId', level: LogLevel.warning);
       return null;
     } else {
-      _log('이미지 view URL 조회 실패 (Status: ${response.statusCode}): $imageId',
-          level: LogLevel.warning);
+      _log(
+        '이미지 view URL 조회 실패 (Status: ${response.statusCode}): $imageId',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {
@@ -76,6 +78,7 @@ Future<Map<String, dynamic>?> downloadImageFromUrl(
   String? fileName,
 }) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     _log('이미지 다운로드 시작: $imageId from $imageUrl');
 
     final response = await http.get(Uri.parse(imageUrl));
@@ -104,25 +107,23 @@ Future<Map<String, dynamic>?> downloadImageFromUrl(
         'imageId': imageId,
         'filePath': filePath,
         'fileSize': response.bodyBytes.length,
-        'message': '이미지 다운로드 완료'
+        'message': '이미지 다운로드 완료',
       };
     } else {
-      _log('이미지 다운로드 실패 (Status: ${response.statusCode}): $imageId',
-          level: LogLevel.warning);
+      _log(
+        '이미지 다운로드 실패 (Status: ${response.statusCode}): $imageId',
+        level: LogLevel.warning,
+      );
       return {
         'success': false,
         'imageId': imageId,
         'error': 'Status ${response.statusCode}',
-        'message': response.body
+        'message': response.body,
       };
     }
   } catch (e) {
     _log('이미지 다운로드 오류: $imageId', level: LogLevel.error, error: e);
-    return {
-      'success': false,
-      'imageId': imageId,
-      'error': e.toString()
-    };
+    return {'success': false, 'imageId': imageId, 'error': e.toString()};
   }
 }
 
@@ -151,11 +152,7 @@ Future<Map<String, dynamic>?> downloadImageToCache(
     );
   } catch (e) {
     _log('이미지 다운로드 실패: $imageId', level: LogLevel.error, error: e);
-    return {
-      'success': false,
-      'imageId': imageId,
-      'error': e.toString()
-    };
+    return {'success': false, 'imageId': imageId, 'error': e.toString()};
   }
 }
 
@@ -171,7 +168,9 @@ Future<File?> downloadThumbnailWithCache(
   try {
     // 1. Check cache first (unless force refresh)
     if (!forceRefresh) {
-      final cachedFile = await cacheService.getCachedThumbnail(imageId.toString());
+      final cachedFile = await cacheService.getCachedThumbnail(
+        imageId.toString(),
+      );
       if (cachedFile != null) {
         _log('썸네일 캐시 히트: $imageId', level: LogLevel.info);
         return cachedFile;
@@ -189,6 +188,7 @@ Future<File?> downloadThumbnailWithCache(
     }
 
     // Download image
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final response = await http.get(Uri.parse(viewResponse.url));
 
     if (response.statusCode == 200) {
@@ -201,8 +201,10 @@ Future<File?> downloadThumbnailWithCache(
       _log('썸네일 다운로드 및 캐싱 성공: $imageId', level: LogLevel.info);
       return cachedFile;
     } else {
-      _log('썸네일 다운로드 실패 (상태 코드: ${response.statusCode}): $imageId',
-          level: LogLevel.warning);
+      _log(
+        '썸네일 다운로드 실패 (상태 코드: ${response.statusCode}): $imageId',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {

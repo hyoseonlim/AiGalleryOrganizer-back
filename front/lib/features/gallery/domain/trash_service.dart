@@ -1,6 +1,8 @@
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:front/core/network/network_policy_service.dart';
+
 import '../data/models/photo_models.dart';
 
 // Backend server configuration
@@ -41,39 +43,35 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
 /// Soft delete an image. The image will be moved to trash.
 Future<Map<String, dynamic>> softDeleteImage(int imageId) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_softDeleteEndpoint/$imageId');
 
     _log('이미지 소프트 삭제 요청: $imageId');
 
-    final response = await http.delete(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.delete(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 204) {
       _log('이미지 소프트 삭제 성공: $imageId', level: LogLevel.info);
       return {
         'success': true,
         'imageId': imageId,
-        'message': '이미지가 휴지통으로 이동되었습니다'
+        'message': '이미지가 휴지통으로 이동되었습니다',
       };
     } else {
-      _log('이미지 소프트 삭제 실패 (상태 코드: ${response.statusCode}): $imageId',
-          level: LogLevel.warning);
+      _log(
+        '이미지 소프트 삭제 실패 (상태 코드: ${response.statusCode}): $imageId',
+        level: LogLevel.warning,
+      );
       return {
         'success': false,
         'imageId': imageId,
         'error': 'Status ${response.statusCode}',
-        'message': response.body
+        'message': response.body,
       };
     }
   } catch (e) {
     _log('이미지 소프트 삭제 오류: $imageId', level: LogLevel.error, error: e);
-    return {
-      'success': false,
-      'imageId': imageId,
-      'error': e.toString()
-    };
+    return {'success': false, 'imageId': imageId, 'error': e.toString()};
   }
 }
 
@@ -126,14 +124,12 @@ Future<Map<String, dynamic>> softDeleteMultipleImages(
 /// Restore a soft-deleted image from trash
 Future<Map<String, dynamic>> restoreImage(int imageId) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_restoreEndpoint/$imageId/restore');
 
     _log('이미지 복원 요청: $imageId');
 
-    final response = await http.post(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.post(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -143,25 +139,23 @@ Future<Map<String, dynamic>> restoreImage(int imageId) async {
         'success': true,
         'imageId': imageId,
         'image': restoredImage,
-        'message': '이미지가 복원되었습니다'
+        'message': '이미지가 복원되었습니다',
       };
     } else {
-      _log('이미지 복원 실패 (상태 코드: ${response.statusCode}): $imageId',
-          level: LogLevel.warning);
+      _log(
+        '이미지 복원 실패 (상태 코드: ${response.statusCode}): $imageId',
+        level: LogLevel.warning,
+      );
       return {
         'success': false,
         'imageId': imageId,
         'error': 'Status ${response.statusCode}',
-        'message': response.body
+        'message': response.body,
       };
     }
   } catch (e) {
     _log('이미지 복원 오류: $imageId', level: LogLevel.error, error: e);
-    return {
-      'success': false,
-      'imageId': imageId,
-      'error': e.toString()
-    };
+    return {'success': false, 'imageId': imageId, 'error': e.toString()};
   }
 }
 
@@ -213,39 +207,35 @@ Future<Map<String, dynamic>> restoreMultipleImages(
 /// Permanently delete an image from trash and S3
 Future<Map<String, dynamic>> permanentlyDeleteImage(int imageId) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_permanentDeleteEndpoint/$imageId');
 
     _log('이미지 영구 삭제 요청: $imageId');
 
-    final response = await http.delete(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.delete(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 204) {
       _log('이미지 영구 삭제 성공: $imageId', level: LogLevel.info);
       return {
         'success': true,
         'imageId': imageId,
-        'message': '이미지가 영구적으로 삭제되었습니다'
+        'message': '이미지가 영구적으로 삭제되었습니다',
       };
     } else {
-      _log('이미지 영구 삭제 실패 (상태 코드: ${response.statusCode}): $imageId',
-          level: LogLevel.warning);
+      _log(
+        '이미지 영구 삭제 실패 (상태 코드: ${response.statusCode}): $imageId',
+        level: LogLevel.warning,
+      );
       return {
         'success': false,
         'imageId': imageId,
         'error': 'Status ${response.statusCode}',
-        'message': response.body
+        'message': response.body,
       };
     }
   } catch (e) {
     _log('이미지 영구 삭제 오류: $imageId', level: LogLevel.error, error: e);
-    return {
-      'success': false,
-      'imageId': imageId,
-      'error': e.toString()
-    };
+    return {'success': false, 'imageId': imageId, 'error': e.toString()};
   }
 }
 
@@ -297,13 +287,11 @@ Future<Map<String, dynamic>> permanentlyDeleteMultipleImages(
 /// Get all soft-deleted images for the current user
 Future<List<ImageResponse>> getTrashedImages() async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_trashListEndpoint');
     _log('휴지통 이미지 목록 조회');
 
-    final response = await http.get(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.get(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;
@@ -313,7 +301,10 @@ Future<List<ImageResponse>> getTrashedImages() async {
       _log('휴지통 이미지 목록 조회 성공: ${images.length}개');
       return images;
     } else {
-      _log('휴지통 이미지 목록 조회 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      _log(
+        '휴지통 이미지 목록 조회 실패 (status: ${response.statusCode})',
+        level: LogLevel.error,
+      );
       throw Exception('휴지통 이미지 목록 조회 실패: ${response.statusCode}');
     }
   } catch (e) {

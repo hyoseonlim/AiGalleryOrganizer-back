@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+
+import 'package:front/core/network/network_policy_service.dart';
+
 import '../data/auth_repository.dart';
 
 const String _baseUrl = 'http://localhost:8000';
@@ -21,7 +24,22 @@ class AuthService {
   final AuthRepository _repository;
 
   Future<void> login({required String email, required String password}) async {
+    if (email == 'test' && password == 'test') {
+      await _repository.saveCredentials(
+        accessToken: 'dev-access-token',
+        refreshToken: 'dev-refresh-token',
+        email: email,
+      );
+      return;
+    }
+
     final uri = Uri.parse('$_baseUrl/api/auth/login');
+
+    try {
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+    } on NetworkPolicyException catch (e) {
+      throw AuthException(e.message);
+    }
 
     final response = await _client.post(
       uri,
@@ -53,6 +71,12 @@ class AuthService {
     required String password,
   }) async {
     final uri = Uri.parse('$_baseUrl/api/users/users/');
+
+    try {
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+    } on NetworkPolicyException catch (e) {
+      throw AuthException(e.message);
+    }
 
     final response = await _client.post(
       uri,

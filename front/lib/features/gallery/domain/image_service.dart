@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
+import 'package:front/core/network/network_policy_service.dart';
+
 import '../data/models/photo_models.dart';
 
 // Backend server configuration
@@ -39,13 +41,11 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
 /// 현재 사용자의 모든 이미지 조회
 Future<List<ImageResponse>> getMyImages() async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_myImagesEndpoint');
     _log('사용자 이미지 목록 조회');
 
-    final response = await http.get(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.get(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;
@@ -55,7 +55,10 @@ Future<List<ImageResponse>> getMyImages() async {
       _log('이미지 목록 조회 성공: ${images.length}개');
       return images;
     } else {
-      _log('이미지 목록 조회 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      _log(
+        '이미지 목록 조회 실패 (status: ${response.statusCode})',
+        level: LogLevel.error,
+      );
       throw Exception('이미지 목록 조회 실패: ${response.statusCode}');
     }
   } catch (e) {
@@ -67,13 +70,11 @@ Future<List<ImageResponse>> getMyImages() async {
 /// 특정 이미지의 view URL 조회 (CloudFront URL)
 Future<ImageViewableResponse?> getImageViewUrl(int imageId) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_imageViewEndpoint/$imageId/view');
     _log('이미지 view URL 조회: $imageId');
 
-    final response = await http.get(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.get(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -84,7 +85,10 @@ Future<ImageViewableResponse?> getImageViewUrl(int imageId) async {
       _log('이미지를 찾을 수 없음: $imageId', level: LogLevel.warning);
       return null;
     } else {
-      _log('이미지 view URL 조회 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      _log(
+        '이미지 view URL 조회 실패 (status: ${response.statusCode})',
+        level: LogLevel.error,
+      );
       return null;
     }
   } catch (e) {
@@ -96,13 +100,11 @@ Future<ImageViewableResponse?> getImageViewUrl(int imageId) async {
 /// 휴지통의 모든 이미지 조회 (소프트 삭제된 이미지)
 Future<List<ImageResponse>> getTrashedImages() async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_trashEndpoint');
     _log('휴지통 이미지 목록 조회');
 
-    final response = await http.get(
-      uri,
-      headers: _getAuthHeaders(),
-    );
+    final response = await http.get(uri, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;
@@ -112,7 +114,10 @@ Future<List<ImageResponse>> getTrashedImages() async {
       _log('휴지통 이미지 목록 조회 성공: ${images.length}개');
       return images;
     } else {
-      _log('휴지통 이미지 목록 조회 실패 (status: ${response.statusCode})', level: LogLevel.error);
+      _log(
+        '휴지통 이미지 목록 조회 실패 (status: ${response.statusCode})',
+        level: LogLevel.error,
+      );
       throw Exception('휴지통 이미지 목록 조회 실패: ${response.statusCode}');
     }
   } catch (e) {
