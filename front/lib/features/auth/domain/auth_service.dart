@@ -52,7 +52,7 @@ class AuthService {
     required String username,
     required String password,
   }) async {
-    final uri = Uri.parse('$_baseUrl/api/users/');
+    final uri = Uri.parse('$_baseUrl/api/users/users/');
 
     final response = await _client.post(
       uri,
