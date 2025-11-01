@@ -14,7 +14,7 @@ from app.schemas.image import (
     ImageResponse,
     ImageAnalysisResult,
 )
-from app.schemas.tag import ImageTagRequest
+from app.schemas.tag import ImageTagRequest, TagResponse
 from app.models.user import User
 from app.services.image import ImageService
 from app.celery_worker import celery_app
@@ -101,6 +101,18 @@ def get_viewable_image_url(
     """
     url = image_service.get_viewable_url(image_id=image_id, user=current_user)
     return ImageViewableResponse(image_id=image_id, url=url)
+
+@router.get("/{image_id}/tags", response_model=List[TagResponse])
+def get_image_tags(
+    image_id: int,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    이미지에 달린 모든 태그를 조회합니다.
+    """
+    return image_service.get_tags_for_image(image_id, current_user.id)
+
 
 @router.post("/{image_id}/tags", status_code=status.HTTP_204_NO_CONTENT)
 def add_tags_to_image(

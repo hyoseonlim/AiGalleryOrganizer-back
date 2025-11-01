@@ -3,16 +3,15 @@ from typing import List, Optional
 
 from app.models.tag import Tag
 from app.repositories.tag import TagRepository
-from app.repositories.category import CategoryRepository # Import CategoryRepository
-from app.schemas.tag import TagCreate, TagUpdate, TagResponse # Removed TagBaseResponse
-# from app.models.tag import TagCategory # Removed
+from app.repositories.category import CategoryRepository
+from app.schemas.tag import TagCreate, TagUpdate, TagResponse
 
 class TagService:
     def __init__(self, repository: TagRepository, category_repository: CategoryRepository):
         self.repository = repository
-        self.category_repository = category_repository # Added
+        self.category_repository = category_repository
 
-    def get_tag(self, tag_id: int) -> Tag: # This still returns the ORM Tag object
+    def get_tag(self, tag_id: int) -> Tag:
         tag = self.repository.find_by_id(tag_id)
         if not tag:
             raise HTTPException(
@@ -22,10 +21,10 @@ class TagService:
         return tag
 
     def get_tags(self, user_id: int, skip: int = 0, limit: int = 100) -> List[TagResponse]:
-        tags = self.repository.find_tags_for_user(user_id=user_id, skip=skip, limit=limit) # Changed method call
+        tags = self.repository.find_tags_for_user(user_id=user_id, skip=skip, limit=limit)
         return [TagResponse.model_validate(tag) for tag in tags]
 
-    def create_tag(self, tag_data: TagCreate, user_id: Optional[int] = None) -> TagResponse: # Changed return type
+    def create_tag(self, tag_data: TagCreate, user_id: Optional[int] = None) -> TagResponse:
         # Validate category_id
         category = self.category_repository.find_by_id(tag_data.category_id)
         if not category:

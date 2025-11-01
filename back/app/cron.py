@@ -53,8 +53,7 @@ def permanently_delete_old_trashed_images():
 
             except ClientError as e:
                 logger.error(f"Error deleting image {image.id} from S3: {e}")
-                # If S3 deletion fails, we might not want to delete from DB.
-                # Rolling back the commit for this image.
+                # S3 삭제 실패일 경우 DB에서 삭제하지 않음
                 db.rollback()
             except Exception as e:
                 logger.error(f"An unexpected error occurred while processing image {image.id}: {e}")

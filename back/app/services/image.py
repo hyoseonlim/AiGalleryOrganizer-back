@@ -255,6 +255,19 @@ class ImageService:
         tags = [self.tag_repository.find_by_name(name) for name in tag_names if self.tag_repository.find_by_name(name)]
         if not tags:
             return
-            
+
         self.repository.remove_tags_from_image(image, tags)
         self.repository.db.commit()
+
+    def get_tags_for_image(self, image_id: int, user_id: int):
+        """이미지에 달린 모든 태그를 조회합니다."""
+        from app.schemas.tag import TagResponse
+
+        image = self.repository.find_by_id(image_id, user_id)
+        if not image:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+
+        # image.tags는 ImageTag 객체들의 리스트
+        # 각 ImageTag의 tag 속성을 통해 Tag 객체에 접근
+        tags = [image_tag.tag for image_tag in image.tags]
+        return [TagResponse.model_validate(tag) for tag in tags]

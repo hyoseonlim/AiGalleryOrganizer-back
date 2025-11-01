@@ -34,7 +34,7 @@ async def login_for_access_token(
         data={"sub": user.email}, expires_delta=refresh_token_expires
     )
     
-    # Hash and store the refresh token in the database
+    # 리프레시 토큰을 해시화하여 데이터베이스에 저장
     hashed_refresh_token = get_password_hash(refresh_token)
     service.update_refresh_token(user, hashed_refresh_token)
 
@@ -63,11 +63,11 @@ async def reissue_token(
     if user is None or not user.hashed_refresh_token:
         raise credentials_exception
     
-    # Verify the refresh token against the stored hashed refresh token
+    # 저장된 해시화된 리프레시 토큰과 대조하여 검증
     if not verify_password(refresh_token, user.hashed_refresh_token):
         raise credentials_exception
 
-    # Generate new access and refresh tokens
+    # 새로운 액세스 토큰과 리프레시 토큰 생성
     new_access_token_expires = timedelta(minutes=30)
     new_access_token = create_access_token(
         data={"sub": user.email}, expires_delta=new_access_token_expires
@@ -77,7 +77,7 @@ async def reissue_token(
         data={"sub": user.email}, expires_delta=new_refresh_token_expires
     )
 
-    # Hash and update the new refresh token in the database
+    # 새로운 리프레시 토큰을 해시화하여 데이터베이스에 업데이트
     new_hashed_refresh_token = get_password_hash(new_refresh_token)
     service.update_refresh_token(user, new_hashed_refresh_token)
 

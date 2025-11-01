@@ -11,7 +11,7 @@ class CategoryUpdate(CategoryBase):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
 
 class CategoryResponse(CategoryBase):
-    id: int # Changed from Field(alias="category_id")
+    id: int 
 
     class Config:
         from_attributes = True
