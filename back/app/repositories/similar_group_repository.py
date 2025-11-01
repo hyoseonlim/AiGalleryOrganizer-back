@@ -18,9 +18,22 @@ class SimilarGroupRepository:
 
     def delete_groups_by_user_id(self, user_id: int) -> int:
         """사용자의 모든 유사 그룹을 삭제합니다."""
+        # 먼저 연관된 SimilarGroupImage 레코드 삭제
+        group_ids = self.db.query(SimilarGroup.id).filter(
+            SimilarGroup.user_id == user_id
+        ).all()
+        group_ids = [g[0] for g in group_ids]
+
+        if group_ids:
+            # 연관된 이미지 레코드 먼저 삭제
+            self.db.query(SimilarGroupImage).filter(
+                SimilarGroupImage.similar_group_id.in_(group_ids)
+            ).delete(synchronize_session=False)
+
+        # 그룹 삭제
         num_deleted = self.db.query(SimilarGroup).filter(
             SimilarGroup.user_id == user_id
-        ).delete()
+        ).delete(synchronize_session=False)
         return num_deleted
 
     def create_group_with_images(self, user_id: int, label: int, image_ids: List[int], best_image_id: int) -> SimilarGroup:
@@ -69,8 +82,14 @@ class SimilarGroupRepository:
 
     def delete_group_by_id(self, group_id: int, user_id: int) -> int:
         """ID로 특정 유사 그룹을 삭제합니다."""
+        # 먼저 연관된 SimilarGroupImage 레코드 삭제
+        self.db.query(SimilarGroupImage).filter(
+            SimilarGroupImage.similar_group_id == group_id
+        ).delete(synchronize_session=False)
+
+        # 그룹 삭제
         num_deleted = self.db.query(SimilarGroup).filter(
             SimilarGroup.id == group_id,
             SimilarGroup.user_id == user_id
-        ).delete()
+        ).delete(synchronize_session=False)
         return num_deleted

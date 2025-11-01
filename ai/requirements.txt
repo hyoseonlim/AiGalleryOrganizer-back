@@ -12,3 +12,4 @@ einops
 celery
 redis
 requests
+python-dotenv

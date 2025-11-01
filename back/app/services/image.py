@@ -1,6 +1,7 @@
 # app/services/image.py
 import uuid
 import logging
+import json
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -174,7 +175,8 @@ class ImageService:
             score: 이미지 품질 점수 (0-1)
             ai_embedding: 이미지 feature vector
         """
-        image = self.repository.find_by_id_for_analysis(image_id)
+        # 파라미터로 받은 db 세션 사용 (중요!)
+        image = db.query(Image).filter(Image.id == image_id).first()
         if not image:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
 
@@ -185,21 +187,28 @@ class ImageService:
 
         # Handle Category and Tag
         if tag_category:
-            category = self.category_repository.find_by_name(tag_category)
-            if not category:
-                from app.schemas.category import CategoryCreate
-                category_create_schema = CategoryCreate(name=tag_category)
-                category = self.category_repository.create(category_create_schema)
+            from app.models.category import Category
+            from app.models.tag import Tag
+            from app.models.association import ImageTag
 
-            # Handle Tag
-            tag_obj = self.tag_repository.find_by_name_and_category_id(tag_name, category.id)
+            # Category 찾기 또는 생성 (같은 db 세션 사용)
+            category = db.query(Category).filter(Category.name == tag_category).first()
+            if not category:
+                category = Category(name=tag_category)
+                db.add(category)
+                db.flush()  # ID 할당을 위해 flush
+
+            # Tag 찾기 또는 생성 (같은 db 세션 사용)
+            tag_obj = db.query(Tag).filter(
+                Tag.name == tag_name,
+                Tag.category_id == category.id
+            ).first()
             if not tag_obj:
-                from app.schemas.tag import TagCreate
-                tag_create_schema = TagCreate(name=tag_name, category_id=category.id)
-                tag_obj = self.tag_repository.create(tag_create_schema)
+                tag_obj = Tag(name=tag_name, category_id=category.id)
+                db.add(tag_obj)
+                db.flush()  # ID 할당을 위해 flush
 
             # ImageTag에 태그 추가 (confidence 포함)
-            from app.models.association import ImageTag
             existing_image_tag = db.query(ImageTag).filter_by(
                 image_id=image.id,
                 tag_id=tag_obj.id
@@ -213,17 +222,17 @@ class ImageService:
                 )
                 db.add(image_tag)
 
-        # Update Image
-        update_data = {"ai_processing_status": AIProcessingStatus.COMPLETED}
+        # Update Image (같은 db 세션 사용)
         if ai_embedding is not None:
-            update_data["ai_embedding"] = ai_embedding
+            # JSON 형식으로 저장하여 일관성 유지
+            image.ai_embedding = json.dumps(ai_embedding)
         if score is not None:
-            update_data["score"] = score
+            image.score = score
+        image.ai_processing_status = AIProcessingStatus.COMPLETED
 
-        updated_image = self.repository.update(image, **update_data)
-        self.repository.db.commit()
-        self.repository.db.refresh(updated_image)
-        return updated_image
+        db.commit()
+        db.refresh(image)
+        return image
 
     def add_tags_to_image(self, image_id: int, user_id: int, tag_names: List[str]):
         image = self.repository.find_by_id(image_id, user_id)

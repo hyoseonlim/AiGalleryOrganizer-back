@@ -1,10 +1,15 @@
 import numpy as np
+import json
+import ast
+import logging
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_distances
 from typing import List
 from app.models import SimilarGroup, Image
 from app.repositories.similar_group_repository import SimilarGroupRepository
 from app.repositories.image import ImageRepository
+
+logger = logging.getLogger(__name__)
 
 class SimilarGroupService:
     def __init__(self, similar_group_repository: SimilarGroupRepository, image_repository: ImageRepository):
@@ -23,8 +28,54 @@ class SimilarGroupService:
             return []  # 그룹을 만들기에 이미지가 충분하지 않음
 
         image_ids = [image.id for image in images]
-        # pgvector에서 온 문자열을 numpy 배열로 변환 (예: "[1,2,3]" -> np.array([1,2,3]))
-        embeddings = np.array([np.fromstring(image.ai_embedding.strip('[]'), sep=',') for image in images])
+        # ai_embedding을 numpy 배열로 변환
+        # JSON 문자열 또는 Python list 문자열 표현을 모두 처리
+        def parse_embedding(embedding_str, image_id=None):
+            try:
+                if embedding_str is None:
+                    logger.warning(f"Image {image_id}: ai_embedding is None")
+                    return None
+
+                if isinstance(embedding_str, str):
+                    # JSON 형식으로 파싱 시도
+                    try:
+                        parsed = json.loads(embedding_str)
+                        return np.array(parsed, dtype=np.float64)
+                    except json.JSONDecodeError:
+                        # Python literal 형식으로 파싱 시도 (안전한 eval)
+                        try:
+                            parsed = ast.literal_eval(embedding_str)
+                            return np.array(parsed, dtype=np.float64)
+                        except (ValueError, SyntaxError) as e:
+                            logger.error(f"Image {image_id}: Failed to parse embedding string: {embedding_str[:100]}... Error: {e}")
+                            return None
+                elif isinstance(embedding_str, (list, tuple)):
+                    # 이미 list/tuple인 경우
+                    return np.array(embedding_str, dtype=np.float64)
+                else:
+                    logger.error(f"Image {image_id}: Unexpected embedding type: {type(embedding_str)}")
+                    return None
+            except Exception as e:
+                logger.error(f"Image {image_id}: Unexpected error parsing embedding: {e}")
+                return None
+
+        # 파싱 및 필터링
+        parsed_embeddings = []
+        valid_images = []
+        for image in images:
+            embedding = parse_embedding(image.ai_embedding, image.id)
+            if embedding is not None and embedding.size > 0:
+                parsed_embeddings.append(embedding)
+                valid_images.append(image)
+            else:
+                logger.warning(f"Skipping image {image.id} due to invalid embedding")
+
+        if len(parsed_embeddings) < min_samples:
+            logger.warning(f"Not enough valid embeddings: {len(parsed_embeddings)} < {min_samples}")
+            return []
+
+        embeddings = np.array(parsed_embeddings)
+        images = valid_images  # 유효한 이미지만 사용
 
         # 2. 코사인 거리 계산
         distances = cosine_distances(embeddings)

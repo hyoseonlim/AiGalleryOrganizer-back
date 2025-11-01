@@ -1,21 +1,4 @@
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: vizota_postgres
-    environment:
-      POSTGRES_USER: vizota_user
-      POSTGRES_PASSWORD: vizota_pass
-      POSTGRES_DB: vizota_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vizota_user -d vizota_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:latest
     container_name: vizota_redis
@@ -31,22 +14,17 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app/app
+      - ./config:/app/config
       - ~/.aws:/app/.aws:ro # Mount AWS credentials
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://vizota_user:vizota_pass@db:5432/vizota_db
       - DEBUG=True
-      - SECRET_KEY=dev-secret-key
       - REDIS_URL=redis://redis:6379/0
-      - DB_HOST=db # Added
-      - DB_PORT=5432 # Added
-      - DB_USER=vizota_user # Added
-      - SEED_DATA=true # Added
+      - SEED_DATA=true
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_started
 
 volumes:
-  postgres_data:
   redis_data:

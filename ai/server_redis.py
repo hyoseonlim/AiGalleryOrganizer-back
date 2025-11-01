@@ -19,15 +19,25 @@ from PIL import Image
 
 import predict_one_image
 
+# 환경 변수 로드
+from dotenv import load_dotenv
+load_dotenv()
+
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Redis 설정 (환경 변수로 설정 가능)
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = os.getenv('REDIS_PORT', '6379')
+REDIS_DB = os.getenv('REDIS_DB', '0')
+REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+
 # Celery 앱 생성
 app = Celery(
     'vizota_ai',
-    broker='redis://localhost:6379/0',
-    backend='redis://localhost:6379/0'
+    broker=REDIS_URL,
+    backend=REDIS_URL
 )
 
 # Celery 설정
