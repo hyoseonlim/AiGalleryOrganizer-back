@@ -13,6 +13,7 @@ from app.schemas.image import (
     ImageViewableResponse,
     ImageResponse,
     ImageAnalysisResult,
+    ImageDetailResponse,
 )
 from app.schemas.tag import ImageTagRequest, TagResponse
 from app.models.user import User
@@ -87,6 +88,18 @@ def get_all_images(
     현재 사용자의 모든 이미지를 페이지네이션하여 가져옵니다.
     """
     return image_service.get_all_images_by_user(user=current_user, skip=skip, limit=limit)
+
+
+@router.get("/{image_id}/detail", response_model=ImageDetailResponse)
+def get_image_detail(
+    image_id: int,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    이미지 상세 정보를 조회합니다 (태그, 카테고리, EXIF 정보 포함).
+    """
+    return image_service.get_image_detail(image_id=image_id, user_id=current_user.id)
 
 
 @router.get("/{image_id}/view", response_model=ImageViewableResponse)

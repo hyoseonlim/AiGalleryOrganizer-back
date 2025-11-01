@@ -73,3 +73,18 @@ class ImageResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class ImageDetailResponse(BaseModel):
+    image_id: int = Field(alias='id')
+    url: Optional[str]
+    hash: Optional[str]
+    size: Optional[int]
+    uploaded_at: datetime
+    ai_processing_status: AIProcessingStatus
+    score: Optional[float]
+    exif: Optional[Dict[str, Any]]
+    tags: List[Any] = []  # Will be populated with TagResponse objects
+
+    class Config:
+        from_attributes = True
+

@@ -10,12 +10,13 @@ from typing import List, Optional
 
 from app.repositories.image import ImageRepository
 from app.schemas.image import (
-    ImageUploadRequest, 
-    ImageUploadResponse, 
-    UploadInstruction, 
-    DuplicateInfo, 
-    ImageResponse, 
-    ImageMetadata
+    ImageUploadRequest,
+    ImageUploadResponse,
+    UploadInstruction,
+    DuplicateInfo,
+    ImageResponse,
+    ImageMetadata,
+    ImageDetailResponse
 )
 from app.models.user import User
 from app.models.image import Image, AIProcessingStatus
@@ -271,3 +272,21 @@ class ImageService:
         # 각 ImageTag의 tag 속성을 통해 Tag 객체에 접근
         tags = [image_tag.tag for image_tag in image.tags]
         return [TagResponse.model_validate(tag) for tag in tags]
+
+    def get_image_detail(self, image_id: int, user_id: int) -> ImageDetailResponse:
+        """이미지 상세 정보를 조회합니다 (태그, 카테고리, EXIF 포함)."""
+        from app.schemas.tag import TagResponse
+
+        image = self.repository.find_by_id(image_id, user_id)
+        if not image:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+
+        # 이미지의 태그 정보 가져오기
+        tags = [image_tag.tag for image_tag in image.tags]
+        tag_responses = [TagResponse.model_validate(tag) for tag in tags]
+
+        # ImageDetailResponse 생성
+        image_detail = ImageDetailResponse.model_validate(image)
+        image_detail.tags = tag_responses
+
+        return image_detail
