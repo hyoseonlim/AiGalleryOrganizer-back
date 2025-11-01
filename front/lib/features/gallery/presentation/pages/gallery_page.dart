@@ -8,6 +8,7 @@ import 'package:front/features/gallery/data/repositories/local_photo_repository.
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'dart:io';
 import 'photo_detail_page.dart';
+import 'swipe_clean_page.dart';
 import '../widgets/upload_progress_widget.dart';
 import '../widgets/duplicate_detection_dialog.dart';
 
@@ -124,10 +125,8 @@ class _GalleryPageState extends State<GalleryPage> {
     if (photoIndex != -1) {
       final result = await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => PhotoDetailPage(
-            photos: _allPhotos,
-            initialIndex: photoIndex,
-          ),
+          builder: (context) =>
+              PhotoDetailPage(photos: _allPhotos, initialIndex: photoIndex),
         ),
       );
 
@@ -176,7 +175,10 @@ class _GalleryPageState extends State<GalleryPage> {
         },
         onPhotoSaved: (photo) {
           // 새 이미지 업로드 추적 시작
-          _uploadStateService.addImageUpload(photo.id, photo.fileName ?? 'Unknown');
+          _uploadStateService.addImageUpload(
+            photo.id,
+            photo.fileName ?? 'Unknown',
+          );
           _onPhotoSaved(photo);
         },
         onStepCompleted: (photoId, step) {
@@ -193,11 +195,14 @@ class _GalleryPageState extends State<GalleryPage> {
 
       // Show duplicate detection dialog if duplicates found
       final duplicates = result['duplicates'] as List<dynamic>? ?? [];
-      final tempIdToFileNameMap = result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
+      final tempIdToFileNameMap =
+          result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
       if (duplicates.isNotEmpty && mounted) {
         await DuplicateDetectionDialog.show(
           context,
-          duplicates: duplicates.map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>)).toList(),
+          duplicates: duplicates
+              .map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>))
+              .toList(),
           tempIdToFileNameMap: tempIdToFileNameMap,
         );
       }
@@ -205,7 +210,9 @@ class _GalleryPageState extends State<GalleryPage> {
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 로컬 저장 완료'),
+            content: Text(
+              '${uploadResult.successCount}/${uploadResult.totalFiles} 파일 로컬 저장 완료',
+            ),
           ),
         );
       }
@@ -231,7 +238,10 @@ class _GalleryPageState extends State<GalleryPage> {
         },
         onPhotoSaved: (photo) {
           // 새 이미지 업로드 추적 시작
-          _uploadStateService.addImageUpload(photo.id, photo.fileName ?? 'Unknown');
+          _uploadStateService.addImageUpload(
+            photo.id,
+            photo.fileName ?? 'Unknown',
+          );
           _onPhotoSaved(photo);
         },
         onStepCompleted: (photoId, step) {
@@ -248,11 +258,14 @@ class _GalleryPageState extends State<GalleryPage> {
 
       // Show duplicate detection dialog if duplicates found
       final duplicates = result['duplicates'] as List<dynamic>? ?? [];
-      final tempIdToFileNameMap = result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
+      final tempIdToFileNameMap =
+          result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
       if (duplicates.isNotEmpty && mounted) {
         await DuplicateDetectionDialog.show(
           context,
-          duplicates: duplicates.map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>)).toList(),
+          duplicates: duplicates
+              .map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>))
+              .toList(),
           tempIdToFileNameMap: tempIdToFileNameMap,
         );
       }
@@ -260,7 +273,9 @@ class _GalleryPageState extends State<GalleryPage> {
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 파일 로컬 저장 완료'),
+            content: Text(
+              '${uploadResult.successCount}/${uploadResult.totalFiles} 파일 로컬 저장 완료',
+            ),
           ),
         );
       }
@@ -286,7 +301,10 @@ class _GalleryPageState extends State<GalleryPage> {
         },
         onPhotoSaved: (photo) {
           // 새 이미지 업로드 추적 시작
-          _uploadStateService.addImageUpload(photo.id, photo.fileName ?? 'Unknown');
+          _uploadStateService.addImageUpload(
+            photo.id,
+            photo.fileName ?? 'Unknown',
+          );
           _onPhotoSaved(photo);
         },
         onStepCompleted: (photoId, step) {
@@ -303,11 +321,14 @@ class _GalleryPageState extends State<GalleryPage> {
 
       // Show duplicate detection dialog if duplicates found
       final duplicates = result['duplicates'] as List<dynamic>? ?? [];
-      final tempIdToFileNameMap = result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
+      final tempIdToFileNameMap =
+          result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
       if (duplicates.isNotEmpty && mounted) {
         await DuplicateDetectionDialog.show(
           context,
-          duplicates: duplicates.map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>)).toList(),
+          duplicates: duplicates
+              .map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>))
+              .toList(),
           tempIdToFileNameMap: tempIdToFileNameMap,
         );
       }
@@ -315,7 +336,9 @@ class _GalleryPageState extends State<GalleryPage> {
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${uploadResult.successCount}/${uploadResult.totalFiles} 이미지 로컬 저장 완료'),
+            content: Text(
+              '${uploadResult.successCount}/${uploadResult.totalFiles} 이미지 로컬 저장 완료',
+            ),
           ),
         );
       }
@@ -335,7 +358,8 @@ class _GalleryPageState extends State<GalleryPage> {
   @override
   Widget build(BuildContext context) {
     // Filter photos based on search query
-    final filteredPhotosByDate = _isSearchBarVisible && _searchController.text.isNotEmpty
+    final filteredPhotosByDate =
+        _isSearchBarVisible && _searchController.text.isNotEmpty
         ? _filterPhotosByQuery(_searchController.text)
         : _photosByDate;
 
@@ -345,7 +369,9 @@ class _GalleryPageState extends State<GalleryPage> {
         onNotification: (notification) {
           // Show search bar when pulling down at the top
           if (notification is ScrollUpdateNotification) {
-            if (_scrollController.hasClients && _scrollController.offset <= -100 && !_isSearchBarVisible) {
+            if (_scrollController.hasClients &&
+                _scrollController.offset <= -100 &&
+                !_isSearchBarVisible) {
               _toggleSearchBar();
             }
           }
@@ -362,7 +388,10 @@ class _GalleryPageState extends State<GalleryPage> {
                   height: _isSearchBarVisible ? 70 : 0,
                   child: _isSearchBarVisible
                       ? Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             boxShadow: [
@@ -381,10 +410,17 @@ class _GalleryPageState extends State<GalleryPage> {
                                   autofocus: true,
                                   decoration: InputDecoration(
                                     hintText: '파일명, 태그로 검색',
-                                    prefixIcon: const Icon(Icons.search, size: 20),
-                                    suffixIcon: _searchController.text.isNotEmpty
+                                    prefixIcon: const Icon(
+                                      Icons.search,
+                                      size: 20,
+                                    ),
+                                    suffixIcon:
+                                        _searchController.text.isNotEmpty
                                         ? IconButton(
-                                            icon: const Icon(Icons.clear, size: 20),
+                                            icon: const Icon(
+                                              Icons.clear,
+                                              size: 20,
+                                            ),
                                             onPressed: () {
                                               setState(() {
                                                 _searchController.clear();
@@ -394,19 +430,29 @@ class _GalleryPageState extends State<GalleryPage> {
                                         : null,
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: Colors.grey[300]!),
+                                      borderSide: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: Colors.grey[300]!),
+                                      borderSide: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+                                      borderSide: BorderSide(
+                                        color: Theme.of(context).primaryColor,
+                                        width: 2,
+                                      ),
                                     ),
                                     filled: true,
                                     fillColor: Colors.grey[50],
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
                                     isDense: true,
                                   ),
                                   onChanged: (value) {
@@ -430,85 +476,94 @@ class _GalleryPageState extends State<GalleryPage> {
                   child: _isLoading
                       ? const Center(child: CircularProgressIndicator())
                       : filteredPhotosByDate.isEmpty
-                          ? Center(
-                              child: SingleChildScrollView(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      _isSearchBarVisible && _searchController.text.isNotEmpty
-                                          ? Icons.search_off
-                                          : Icons.photo_library_outlined,
-                                      size: 80,
-                                      color: Colors.grey[400],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      _isSearchBarVisible && _searchController.text.isNotEmpty
-                                          ? '검색 결과가 없습니다'
-                                          : '사진이 없습니다',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      _isSearchBarVisible && _searchController.text.isNotEmpty
-                                          ? '다른 검색어를 입력해보세요'
-                                          : '하단의 + 버튼을 눌러 사진을 추가하세요',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[500],
-                                      ),
-                                    ),
-                                    if (!_isSearchBarVisible)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: Text(
-                                          '↓ 아래로 당겨서 검색',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[400],
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                      ? Center(
+                          child: SingleChildScrollView(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _isSearchBarVisible &&
+                                          _searchController.text.isNotEmpty
+                                      ? Icons.search_off
+                                      : Icons.photo_library_outlined,
+                                  size: 80,
+                                  color: Colors.grey[400],
                                 ),
-                              ),
-                            )
-                          : ListView.builder(
-                              controller: _scrollController,
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              itemCount: filteredPhotosByDate.length,
-                              itemBuilder: (context, index) {
-                                final date = filteredPhotosByDate.keys.elementAt(index);
-                                final photos = filteredPhotosByDate[date]!;
-                                return _DateSection(
-                                  date: date,
-                                  photos: photos,
-                                  localRepo: _localRepo,
-                                  selectedPhotos: _photoSelectionService.selectedPhotos,
-                                  isMultiSelectMode: _photoSelectionService.isMultiSelectMode,
-                                  onPhotoTap: (photoId) {
-                                    if (_photoSelectionService.isMultiSelectMode) {
-                                      _photoSelectionService.onPhotoTap(photoId);
-                                    } else {
-                                      _navigateToPhotoDetail(photoId);
-                                    }
-                                  },
-                                  onPhotoLongPress: _photoSelectionService.onPhotoLongPress,
-                                );
-                              },
+                                const SizedBox(height: 16),
+                                Text(
+                                  _isSearchBarVisible &&
+                                          _searchController.text.isNotEmpty
+                                      ? '검색 결과가 없습니다'
+                                      : '사진이 없습니다',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _isSearchBarVisible &&
+                                          _searchController.text.isNotEmpty
+                                      ? '다른 검색어를 입력해보세요'
+                                      : '하단의 + 버튼을 눌러 사진을 추가하세요',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                                if (!_isSearchBarVisible)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      '↓ 아래로 당겨서 검색',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[400],
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: filteredPhotosByDate.length,
+                          itemBuilder: (context, index) {
+                            final date = filteredPhotosByDate.keys.elementAt(
+                              index,
+                            );
+                            final photos = filteredPhotosByDate[date]!;
+                            return _DateSection(
+                              date: date,
+                              photos: photos,
+                              localRepo: _localRepo,
+                              selectedPhotos:
+                                  _photoSelectionService.selectedPhotos,
+                              isMultiSelectMode:
+                                  _photoSelectionService.isMultiSelectMode,
+                              onPhotoTap: (photoId) {
+                                if (_photoSelectionService.isMultiSelectMode) {
+                                  _photoSelectionService.onPhotoTap(photoId);
+                                } else {
+                                  _navigateToPhotoDetail(photoId);
+                                }
+                              },
+                              onPhotoLongPress:
+                                  _photoSelectionService.onPhotoLongPress,
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
             // Upload progress indicator on the left side
-            if (_uploadStateService.isUploading || _uploadStateService.allUploads.isNotEmpty)
+            if (_uploadStateService.isUploading ||
+                _uploadStateService.allUploads.isNotEmpty)
               Positioned(
                 left: 16,
                 bottom: 16,
@@ -519,8 +574,12 @@ class _GalleryPageState extends State<GalleryPage> {
                   onRetry: (photoId) async {
                     // 재시도 처리: 로컬에서 원본 파일을 가져와 재업로드
                     try {
-                      final photo = _allPhotos.firstWhere((p) => p.id == photoId);
-                      final originalFile = await _localRepo.getOriginalPhoto(photoId);
+                      final photo = _allPhotos.firstWhere(
+                        (p) => p.id == photoId,
+                      );
+                      final originalFile = await _localRepo.getOriginalPhoto(
+                        photoId,
+                      );
 
                       if (originalFile != null) {
                         // 실패 상태 초기화
@@ -531,10 +590,17 @@ class _GalleryPageState extends State<GalleryPage> {
                           photo,
                           originalFile,
                           onStepCompleted: (retryPhotoId, step) {
-                            _uploadStateService.completeImageStep(retryPhotoId, step);
+                            _uploadStateService.completeImageStep(
+                              retryPhotoId,
+                              step,
+                            );
                           },
                           onStepFailed: (retryPhotoId, step, error) {
-                            _uploadStateService.failImageStep(retryPhotoId, step, error);
+                            _uploadStateService.failImageStep(
+                              retryPhotoId,
+                              step,
+                              error,
+                            );
                           },
                         );
                       } else {
@@ -565,41 +631,51 @@ class _GalleryPageState extends State<GalleryPage> {
       ),
       floatingActionButtonLocation: ExpandableFab.location,
       floatingActionButton: _photoSelectionService.isMultiSelectMode
-      ? null
-      : ExpandableFab(
-        openButtonBuilder: RotateFloatingActionButtonBuilder(
-          child: const Icon(Icons.add),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-        ),
-        closeButtonBuilder: DefaultFloatingActionButtonBuilder(
-          child: const Icon(Icons.close),
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-        ),
-        type: ExpandableFabType.up,
-        distance: 70,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'file',
-            onPressed: _handlePickFile,
-            tooltip: '파일 선택',
-            child: const Icon(Icons.insert_drive_file),
-          ),
-          FloatingActionButton.small(
-            heroTag: 'folder',
-            onPressed: _handlePickFolder,
-            tooltip: '폴더 선택',
-            child: const Icon(Icons.folder_open),
-          ),
-          FloatingActionButton.small(
-            heroTag: 'gallery',
-            onPressed: _handleOpenGallery,
-            tooltip: '갤러리 열기',
-            child: const Icon(Icons.photo_library),
-          ),
-        ],
-      ),
+          ? null
+          : ExpandableFab(
+              openButtonBuilder: RotateFloatingActionButtonBuilder(
+                child: const Icon(Icons.add),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              closeButtonBuilder: DefaultFloatingActionButtonBuilder(
+                child: const Icon(Icons.close),
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              type: ExpandableFabType.up,
+              distance: 70,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'file',
+                  onPressed: _handlePickFile,
+                  tooltip: '파일 선택',
+                  child: const Icon(Icons.insert_drive_file),
+                ),
+                FloatingActionButton.small(
+                  heroTag: 'folder',
+                  onPressed: _handlePickFolder,
+                  tooltip: '폴더 선택',
+                  child: const Icon(Icons.folder_open),
+                ),
+                FloatingActionButton.small(
+                  heroTag: 'gallery',
+                  onPressed: _handleOpenGallery,
+                  tooltip: '갤러리 열기',
+                  child: const Icon(Icons.photo_library),
+                ),
+                FloatingActionButton.small(
+                  heroTag: 'swipe-clean',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SwipeCleanPage()),
+                    );
+                  },
+                  tooltip: '스와이프 정리',
+                  child: const Icon(Icons.swipe),
+                ),
+              ],
+            ),
     );
   }
 
@@ -615,8 +691,8 @@ class _GalleryPageState extends State<GalleryPage> {
         final userTags = photo.metadata.userTags.join(' ').toLowerCase();
 
         return fileName.contains(lowerQuery) ||
-               systemTags.contains(lowerQuery) ||
-               userTags.contains(lowerQuery);
+            systemTags.contains(lowerQuery) ||
+            userTags.contains(lowerQuery);
       }).toList();
 
       if (matchingPhotos.isNotEmpty) {
@@ -663,14 +739,8 @@ class _GalleryPageState extends State<GalleryPage> {
             // TODO: Handle other options like sort
           },
           itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-            const PopupMenuItem<String>(
-              value: 'sort',
-              child: Text('정렬'),
-            ),
-            const PopupMenuItem<String>(
-              value: 'select',
-              child: Text('선택'),
-            ),
+            const PopupMenuItem<String>(value: 'sort', child: Text('정렬')),
+            const PopupMenuItem<String>(value: 'select', child: Text('선택')),
           ],
         ),
       ],
@@ -816,7 +886,9 @@ class _PhotoItem extends StatelessWidget {
                         height: 12,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(
@@ -851,17 +923,15 @@ class _PhotoItem extends StatelessWidget {
               right: 4,
               child: Icon(
                 isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: isSelected ? Theme.of(context).primaryColor : Colors.white70,
+                color: isSelected
+                    ? Theme.of(context).primaryColor
+                    : Colors.white70,
               ),
             ),
           // Selection overlay
-          if (isSelected)
-            Container(
-              color: Colors.black.withValues(alpha: 0.3),
-            ),
+          if (isSelected) Container(color: Colors.black.withValues(alpha: 0.3)),
         ],
       ),
     );
   }
-
 }
