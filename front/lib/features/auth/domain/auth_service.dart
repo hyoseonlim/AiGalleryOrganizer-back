@@ -24,7 +24,7 @@ class AuthService {
   final AuthRepository _repository;
 
   Future<void> login({required String email, required String password}) async {
-    if (email == 'test' && password == 'test') {
+    if (email == 'test@test.com' && password == 'testtest') {
       await _repository.saveCredentials(
         accessToken: 'dev-access-token',
         refreshToken: 'dev-refresh-token',
