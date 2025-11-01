@@ -14,7 +14,6 @@ class SwipeCleanPage extends StatefulWidget {
 
 class _SwipeCleanPageState extends State<SwipeCleanPage> {
   late final SwipeCleanController _controller;
-  double _dragProgress = 0;
   Color? _overlayColor;
   Timer? _overlayTimer;
   bool _isProcessing = false;
@@ -56,35 +55,19 @@ class _SwipeCleanPageState extends State<SwipeCleanPage> {
 
   Future<void> _handleSwipe(bool keep) async {
     if (_isProcessing) return;
-    _isProcessing = true;
+    setState(() {
+      _isProcessing = true;
+    });
+    _showOverlay(keep ? Colors.green : Colors.red);
     if (keep) {
-      _showOverlay(Colors.green);
       await _controller.keepCurrent();
     } else {
-      _showOverlay(Colors.red);
       await _controller.discardCurrent();
     }
-    _dragProgress = 0;
-    _isProcessing = false;
-  }
-
-  void _onDragUpdate(DragUpdateDetails details) {
-    final width = MediaQuery.of(context).size.width;
+    if (!mounted) return;
     setState(() {
-      _dragProgress = (details.primaryDelta ?? 0) / width;
+      _isProcessing = false;
     });
-  }
-
-  void _onDragEnd(DragEndDetails details) {
-    final velocity = details.velocity.pixelsPerSecond.dx;
-    if (velocity.abs() < 300 && _dragProgress.abs() < 0.2) {
-      setState(() {
-        _dragProgress = 0;
-      });
-      return;
-    }
-    final keep = velocity < 0 || _dragProgress < 0;
-    _handleSwipe(keep);
   }
 
   PopupMenuButton<SwipeOrder> _buildOrderMenu() {
@@ -158,7 +141,6 @@ class _SwipeCleanPageState extends State<SwipeCleanPage> {
               ),
             ),
             Expanded(child: child),
-            _buildActions(),
           ],
         );
       },
@@ -166,9 +148,28 @@ class _SwipeCleanPageState extends State<SwipeCleanPage> {
   }
 
   Widget _buildImageContent(ThemeData theme, ImageResponse image, String url) {
-    return GestureDetector(
-      onHorizontalDragUpdate: _onDragUpdate,
-      onHorizontalDragEnd: _onDragEnd,
+    return Dismissible(
+      key: ValueKey(image.id),
+      direction: DismissDirection.horizontal,
+      background: _buildDismissBackground(
+        alignment: Alignment.centerLeft,
+        color: Colors.red.withOpacity(0.2),
+        icon: Icons.delete_outline,
+        label: '휴지통으로',
+        labelColor: Colors.red.shade700,
+      ),
+      secondaryBackground: _buildDismissBackground(
+        alignment: Alignment.centerRight,
+        color: Colors.green.withOpacity(0.2),
+        icon: Icons.bookmark_added_outlined,
+        label: '남기기',
+        labelColor: Colors.green.shade700,
+      ),
+      confirmDismiss: (direction) async => !_isProcessing,
+      onDismissed: (direction) {
+        final keep = direction == DismissDirection.endToStart;
+        _handleSwipe(keep);
+      },
       child: Stack(
         children: [
           Center(
@@ -205,31 +206,6 @@ class _SwipeCleanPageState extends State<SwipeCleanPage> {
     );
   }
 
-  Widget _buildActions() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _handleSwipe(true),
-              icon: const Icon(Icons.bookmark_added_outlined),
-              label: const Text('남기기'),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _handleSwipe(false),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('휴지통으로'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMessageCard(String message) {
     return Center(
       child: Padding(
@@ -255,6 +231,34 @@ class _SwipeCleanPageState extends State<SwipeCleanPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDismissBackground({
+    required Alignment alignment,
+    required Color color,
+    required IconData icon,
+    required String label,
+    required Color labelColor,
+  }) {
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      color: color,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: labelColor),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              color: labelColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }

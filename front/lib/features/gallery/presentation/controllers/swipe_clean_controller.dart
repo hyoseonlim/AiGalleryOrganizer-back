@@ -2,20 +2,14 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../../data/api/gallery_api_factory.dart';
-import '../../data/api/endpoints/image_api.dart';
-import '../../data/api/endpoints/trash_api.dart';
 import '../../data/models/photo_models.dart';
+import '../../domain/image_service.dart' as image_service;
+import '../../domain/trash_service.dart' as trash_service;
 
 enum SwipeOrder { oldest, random }
 
 class SwipeCleanController extends ChangeNotifier {
-  SwipeCleanController({ImageApi? imageApi, TrashApi? trashApi})
-    : _imageApi = imageApi ?? GalleryApiFactory.instance.image,
-      _trashApi = trashApi ?? GalleryApiFactory.instance.trash;
-
-  final ImageApi _imageApi;
-  final TrashApi _trashApi;
+  SwipeCleanController();
 
   bool _isLoading = false;
   String? _error;
@@ -39,12 +33,13 @@ class SwipeCleanController extends ChangeNotifier {
       return _viewableCache[image.id];
     }
 
-    final response = await _imageApi.getImageViewUrl(image.id);
-    if (response.success && response.data != null) {
-      _viewableCache[image.id] = response.data!;
-      return response.data!;
+    final response = await image_service.getImageViewUrl(image.id);
+    if (response != null) {
+      _viewableCache[image.id] = response;
+      return response;
     }
-    _error = response.error ?? '이미지 URL을 불러오지 못했습니다.';
+
+    _error = '이미지 URL을 불러오지 못했습니다.';
     notifyListeners();
     return null;
   }
@@ -57,12 +52,15 @@ class SwipeCleanController extends ChangeNotifier {
     _currentIndex = 0;
     notifyListeners();
 
-    final response = await _imageApi.getMyImages();
-    if (response.success && response.data != null) {
-      _images.addAll(response.data!);
+    try {
+      final images = await image_service.getMyImages();
+      _images.addAll(images);
       _applyOrder();
-    } else {
-      _error = response.error ?? '이미지를 불러오지 못했습니다.';
+      if (_images.isEmpty) {
+        _error = null;
+      }
+    } catch (e) {
+      _error = '이미지를 불러오지 못했습니다.';
     }
 
     _isLoading = false;
@@ -85,8 +83,8 @@ class SwipeCleanController extends ChangeNotifier {
     final image = currentImage;
     if (image == null) return;
 
-    final response = await _trashApi.softDeleteImage(image.id);
-    if (response.success) {
+    final result = await trash_service.softDeleteImage(image.id);
+    if (result['success'] == true) {
       _viewableCache.remove(image.id);
       _images.removeAt(_currentIndex);
       if (_currentIndex >= _images.length) {
@@ -94,7 +92,9 @@ class SwipeCleanController extends ChangeNotifier {
       }
       notifyListeners();
     } else {
-      _error = response.error ?? '이미지를 휴지통으로 이동하지 못했습니다.';
+      _error = (result['message'] as String?) ??
+          (result['error'] as String?) ??
+          '이미지를 휴지통으로 이동하지 못했습니다.';
       notifyListeners();
     }
   }

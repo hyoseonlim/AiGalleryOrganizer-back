@@ -3,6 +3,7 @@ import 'package:front/api/vizota_api.dart';
 /// AI 제안 서비스
 class SuggestionService {
   final _apiService = SimilarGroupsApiService();
+  final ImageApiService _imageApiService = ImageApiService();
 
   /// 유사 그룹 찾기 및 생성
   Future<List<SimilarGroupResponse>> findAndGroupImages({
@@ -19,7 +20,32 @@ class SuggestionService {
 
   /// 특정 그룹의 이미지 목록 조회
   Future<List<ImageResponse>> getImagesForGroup(int groupId) async {
-    return await _apiService.getImagesForGroup(groupId);
+    final images = await _apiService.getImagesForGroup(groupId);
+
+    final updatedImages = await Future.wait(images.map((image) async {
+      // url이 이미 절대 경로면 그대로 사용
+      final currentUrl = image.url;
+      final isAbsolute = currentUrl != null &&
+          (currentUrl.startsWith('http://') || currentUrl.startsWith('https://'));
+      if (isAbsolute) {
+        return image;
+      }
+
+      try {
+        final view = await _imageApiService.getImageViewUrl(image.id);
+        return ImageResponse(
+          id: image.id,
+          url: view.url,
+          uploadedAt: image.uploadedAt,
+          status: image.status,
+        );
+      } catch (_) {
+        // 뷰 URL 생성 실패 시 기존 값을 그대로 사용
+        return image;
+      }
+    }));
+
+    return updatedImages;
   }
 
   /// 제안 거절
