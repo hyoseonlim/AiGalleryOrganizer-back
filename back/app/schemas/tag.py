@@ -21,5 +21,8 @@ class TagResponse(TagBase):
     class Config:
         from_attributes = True
 
+class ImageTagRequest(BaseModel):
+    tag_names: list[str]
+
 # TagBaseResponse is no longer needed
 # TagResponse.model_rebuild() is no longer needed as TagResponse is not recursive

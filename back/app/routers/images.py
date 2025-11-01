@@ -14,6 +14,7 @@ from app.schemas.image import (
     ImageResponse,
     ImageAnalysisResult,
 )
+from app.schemas.tag import ImageTagRequest
 from app.models.user import User
 from app.services.image import ImageService
 from app.tasks import analyze_image_task
@@ -69,6 +70,19 @@ def notify_upload_complete(
     )
 
 
+@router.get("/", response_model=List[ImageResponse])
+def get_all_images(
+    skip: int = 0,
+    limit: int = 100,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    현재 사용자의 모든 이미지를 페이지네이션하여 가져옵니다.
+    """
+    return image_service.get_all_images_by_user(user=current_user, skip=skip, limit=limit)
+
+
 @router.get("/{image_id}/view", response_model=ImageViewableResponse)
 def get_viewable_image_url(
     image_id: int,
@@ -81,6 +95,34 @@ def get_viewable_image_url(
     """
     url = image_service.get_viewable_url(image_id=image_id, user=current_user)
     return ImageViewableResponse(image_id=image_id, url=url)
+
+@router.post("/{image_id}/tags", status_code=status.HTTP_204_NO_CONTENT)
+def add_tags_to_image(
+    image_id: int,
+    request: ImageTagRequest,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    이미지에 태그를 추가합니다. 태그가 없으면 'custom' 카테고리로 새로 생성합니다.
+    """
+    image_service.add_tags_to_image(image_id, current_user.id, request.tag_names)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/{image_id}/tags", status_code=status.HTTP_204_NO_CONTENT)
+def remove_tags_from_image(
+    image_id: int,
+    request: ImageTagRequest,
+    image_service: ImageService = Depends(get_image_service),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    이미지에서 태그를 제거합니다.
+    """
+    image_service.remove_tags_from_image(image_id, current_user.id, request.tag_names)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 def soft_delete_image(

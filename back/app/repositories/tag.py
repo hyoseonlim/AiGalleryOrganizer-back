@@ -30,9 +30,8 @@ class TagRepository:
         db_tag = Tag(**tag_data.model_dump(exclude_unset=True))
         if user_id:
             db_tag.user_id = user_id
-        # category_id is now part of tag_data, no special handling needed here
         self.db.add(db_tag)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(db_tag)
         return db_tag
 
@@ -40,10 +39,17 @@ class TagRepository:
         update_data = tag_data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(tag, key, value)
-        self.db.commit()
-        self.db.refresh(tag)
         return tag
 
     def delete(self, tag: Tag) -> None:
         self.db.delete(tag)
-        self.db.commit()
+
+    def find_or_create_tags_by_name(self, user_id: int, tag_names: List[str], category_id: int) -> List[Tag]:
+        tags = []
+        for name in tag_names:
+            tag = self.find_by_name(name)
+            if not tag:
+                tag_create = TagCreate(name=name, category_id=category_id)
+                tag = self.create(tag_create, user_id=user_id)
+            tags.append(tag)
+        return tags
