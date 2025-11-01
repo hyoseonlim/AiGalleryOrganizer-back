@@ -1,5 +1,5 @@
 # app/routers/users.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from typing import List
 
 from app.dependencies import get_user_service, get_current_user, get_image_service
@@ -29,7 +29,7 @@ def get_my_images(
     image_service: ImageService = Depends(get_image_service),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all images for the current user."""
+    """현재 사용자의 모든 이미지를 가져옵니다."""
     return image_service.get_all_images_by_user(user=current_user)
 
 @router.get("/{user_id}", response_model=UserResponse)

@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List, Optional
+from fastapi import APIRouter, Depends, status
+from typing import List
 
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user # Assuming get_current_user is for authentication
@@ -8,10 +8,7 @@ from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryRespons
 from app.services.category import CategoryService
 from app.repositories.category import CategoryRepository # For dependency injection
 
-router = APIRouter(
-    prefix="/categories",
-    tags=["categories"],
-)
+router = APIRouter(tags=["categories"])
 
 # Dependency to get CategoryService
 def get_category_service(db: Session = Depends(get_db)) -> CategoryService:
@@ -24,7 +21,7 @@ def create_category(
     service: CategoryService = Depends(get_category_service),
     current_user: User = Depends(get_current_user), # Assuming categories can be user-specific or admin-only
 ):
-    """Create a new category."""
+    """새 카테고리를 생성합니다."""
     # You might want to add authorization here (e.g., only admins can create categories)
     return service.create_category(category_data)
 
@@ -35,7 +32,7 @@ def get_all_categories(
     service: CategoryService = Depends(get_category_service),
     current_user: User = Depends(get_current_user), # Authentication check
 ):
-    """Retrieve a list of all categories."""
+    """모든 카테고리 목록을 가져옵니다."""
     return service.get_categories(skip=skip, limit=limit)
 
 @router.get("/{category_id}", response_model=CategoryResponse)
@@ -44,7 +41,7 @@ def get_category_by_id(
     service: CategoryService = Depends(get_category_service),
     current_user: User = Depends(get_current_user), # Authentication check
 ):
-    """Retrieve a single category by its ID."""
+    """ID로 단일 카테고리를 가져옵니다."""
     return service.get_category(category_id)
 
 @router.put("/{category_id}", response_model=CategoryResponse)
@@ -54,7 +51,7 @@ def update_category(
     service: CategoryService = Depends(get_category_service),
     current_user: User = Depends(get_current_user), # Authentication check
 ):
-    """Update an existing category."""
+    """기존 카테고리를 업데이트합니다."""
     # You might want to add authorization here
     return service.update_category(category_id, category_data)
 
@@ -64,6 +61,6 @@ def delete_category(
     service: CategoryService = Depends(get_category_service),
     current_user: User = Depends(get_current_user), # Authentication check
 ):
-    """Delete a category."""
+    """카테고리를 삭제합니다."""
     # You might want to add authorization here
     service.delete_category(category_id)

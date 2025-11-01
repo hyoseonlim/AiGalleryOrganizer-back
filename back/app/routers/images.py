@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.dependencies import get_db, get_image_service, get_user_service, get_current_user
+from app.dependencies import get_db, get_image_service, get_current_user
 from app.aws import get_s3_client
 from app.schemas.image import (
     ImageUploadRequest,
@@ -16,7 +16,6 @@ from app.schemas.image import (
 )
 from app.models.user import User
 from app.services.image import ImageService
-from app.services.user import UserService
 from app.tasks import analyze_image_task
 from config.config import settings
 
@@ -30,7 +29,7 @@ def request_upload_urls(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Generate presigned URLs for uploading a number of images.
+    여러 이미지 업로드를 위한 사전 서명된 URL을 생성합니다.
     """
     return image_service.request_upload_urls(
         s3_client=s3_client,
@@ -47,7 +46,7 @@ def notify_upload_complete(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Notify the server that an image upload is complete and trigger processing.
+    이미지 업로드가 완료되었음을 서버에 알리고 처리를 시작합니다.
     """
     updated_image = image_service.notify_upload_complete(
         image_id=request.image_id,
@@ -77,8 +76,8 @@ def get_viewable_image_url(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get a publicly viewable URL for a completed image.
-    The URL is served via CloudFront.
+    완료된 이미지에 대한 공개적으로 볼 수 있는 URL을 가져옵니다.
+    URL은 CloudFront를 통해 제공됩니다.
     """
     url = image_service.get_viewable_url(image_id=image_id, user=current_user)
     return ImageViewableResponse(image_id=image_id, url=url)
@@ -90,7 +89,7 @@ def soft_delete_image(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Soft delete an image. The image will be moved to trash.
+    이미지를 휴지통으로 이동합니다 (소프트 삭제).
     """
     image_service.soft_delete_image(image_id=image_id, user=current_user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -101,7 +100,7 @@ def get_trashed_images(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get all soft-deleted images for the current user.
+    현재 사용자의 모든 휴지통 이미지를 가져옵니다.
     """
     return image_service.get_trashed_images(user=current_user)
 
@@ -112,7 +111,7 @@ def restore_image(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Restore a soft-deleted image from trash.
+    휴지통에서 이미지를 복원합니다.
     """
     return image_service.restore_image(image_id=image_id, user=current_user)
 
@@ -124,8 +123,7 @@ def receive_analysis_results(
     db: Session = Depends(get_db),
 ):
     """
-    Receives AI analysis results (tag, category, embedding) from the AI server
-    and updates the image in the database.
+    AI 서버로부터 태그, 카테고리, 임베딩 등 AI 분석 결과를 받아 데이터베이스의 이미지 정보를 업데이트합니다.
     """
     image_service.update_image_analysis_results(
         db=db,
@@ -145,7 +143,7 @@ def permanently_delete_image(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Permanently delete an image from trash and S3.
+    휴지통과 S3에서 이미지를 영구적으로 삭제합니다.
     """
     image_service.permanently_delete_image(s3_client=s3_client, image_id=image_id, user=current_user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

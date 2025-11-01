@@ -13,7 +13,6 @@ from config.config import settings
 
 router = APIRouter(tags=["auth"])
 
-
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
