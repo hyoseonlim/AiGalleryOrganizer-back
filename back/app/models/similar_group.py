@@ -5,10 +5,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 import enum
 
-class SimilarGroupStatus(enum.Enum):
-    SUGGESTED = "suggested"
-    CREATED = "created"
-    REJECTED = "rejected"
 
 class SimilarGroup(Base):
     __tablename__ = "similar_groups"
@@ -16,8 +12,9 @@ class SimilarGroup(Base):
     id = Column("similar_group_id", Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=True)
-    status = Column(Enum(SimilarGroupStatus), nullable=False, default=SimilarGroupStatus.SUGGESTED)
     created_at = Column(TIMESTAMP(timezone=True), default=func.now())
+    best_image_id = Column(Integer, ForeignKey("images.image_id"), nullable=True)
 
     user = relationship("User")
-    images = relationship("SimilarGroupImage", back_populates="group")
+    images = relationship("SimilarGroupImage", back_populates="group", cascade="all, delete-orphan")
+    best_image = relationship("Image")

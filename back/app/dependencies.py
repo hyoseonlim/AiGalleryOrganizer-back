@@ -66,8 +66,9 @@ def get_similar_group_repository(db: Session = Depends(get_db)) -> SimilarGroupR
 
 def get_similar_group_service(
     similar_group_repository: SimilarGroupRepository = Depends(get_similar_group_repository),
+    image_repository: ImageRepository = Depends(get_image_repository),
 ) -> SimilarGroupService:
-    return SimilarGroupService(similar_group_repository)
+    return SimilarGroupService(similar_group_repository, image_repository)
 
 
 async def get_current_user(

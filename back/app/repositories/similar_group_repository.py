@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 from typing import List
 from app.models import Image, SimilarGroup, SimilarGroupImage
-from app.models.similar_group import SimilarGroupStatus
+
 
 class SimilarGroupRepository:
     def __init__(self, db: Session):
@@ -16,21 +16,20 @@ class SimilarGroupRepository:
             Image.deleted_at.is_(None)
         ).all()
 
-    def delete_suggested_groups(self, user_id: int) -> int:
-        """기존에 제안된 그룹을 삭제합니다."""
+    def delete_groups_by_user_id(self, user_id: int) -> int:
+        """사용자의 모든 유사 그룹을 삭제합니다."""
         num_deleted = self.db.query(SimilarGroup).filter(
-            SimilarGroup.user_id == user_id,
-            SimilarGroup.status == SimilarGroupStatus.SUGGESTED
+            SimilarGroup.user_id == user_id
         ).delete()
         return num_deleted
 
-    def create_group_with_images(self, user_id: int, label: int, image_ids: List[int]) -> SimilarGroup:
+    def create_group_with_images(self, user_id: int, label: int, image_ids: List[int], best_image_id: int) -> SimilarGroup:
         """새로운 유사 그룹과 이미지 연결을 생성합니다."""
         # 새 그룹 생성
         new_group = SimilarGroup(
             user_id=user_id,
             name=f"Suggested Group {label + 1}",
-            status=SimilarGroupStatus.SUGGESTED
+            best_image_id=best_image_id
         )
         self.db.add(new_group)
         self.db.flush()  # new_group.id를 얻기 위해
@@ -56,3 +55,22 @@ class SimilarGroupRepository:
             SimilarGroup.user_id == user_id,
             Image.deleted_at.is_(None)
         ).all()
+
+    def get_groups_by_user(self, user_id: int) -> List[SimilarGroup]:
+        """사용자의 모든 유사 그룹을 가져옵니다."""
+        return self.db.query(SimilarGroup).filter(SimilarGroup.user_id == user_id).all()
+
+    def get_group_by_id(self, group_id: int, user_id: int) -> SimilarGroup:
+        """ID로 특정 유사 그룹을 가져옵니다."""
+        return self.db.query(SimilarGroup).filter(
+            SimilarGroup.id == group_id, 
+            SimilarGroup.user_id == user_id
+        ).first()
+
+    def delete_group_by_id(self, group_id: int, user_id: int) -> int:
+        """ID로 특정 유사 그룹을 삭제합니다."""
+        num_deleted = self.db.query(SimilarGroup).filter(
+            SimilarGroup.id == group_id,
+            SimilarGroup.user_id == user_id
+        ).delete()
+        return num_deleted

@@ -55,3 +55,13 @@ class ImageRepository:
         """이미지 레코드를 영구적으로 삭제합니다."""
         self.db.delete(image)
         self.db.commit()
+
+    def soft_delete_by_ids(self, image_ids: List[int], user_id: int):
+        """ID 목록으로 이미지를 소프트 삭제합니다."""
+        from datetime import datetime, timezone
+
+        self.db.query(Image).filter(
+            Image.id.in_(image_ids),
+            Image.user_id == user_id
+        ).update({Image.deleted_at: datetime.now(timezone.utc)}, synchronize_session=False)
+        self.db.commit()
