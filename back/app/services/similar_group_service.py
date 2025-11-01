@@ -44,7 +44,7 @@ class SimilarGroupService:
             if label == -1:
                 continue  # 아웃라이어는 그룹으로 만들지 않음
 
-            cluster_image_ids = [image_ids[i] for i, l in enumerate(labels) if l == label]
+            cluster_image_ids = [image_ids[i] for i, label_ in enumerate(labels) if label_ == label]
             new_group = self.repository.create_group_with_images(user_id, label, cluster_image_ids)
             
             # 생성된 그룹 객체에 이미지 카운트를 임시 속성으로 추가

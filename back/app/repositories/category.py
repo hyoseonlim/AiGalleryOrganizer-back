@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from app.models import Category
 from app.schemas.category import CategoryCreate, CategoryUpdate
 

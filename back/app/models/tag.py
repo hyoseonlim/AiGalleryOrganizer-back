@@ -4,7 +4,6 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 # import enum # No longer needed
 
-from app.models.category import Category # Import Category
 
 # TagCategory enum is no longer needed
 # class TagCategory(enum.Enum):

@@ -1,5 +1,5 @@
 # back/app/models/album.py
-from sqlalchemy import Column, Integer, String, TIMESTAMP, Text, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, TIMESTAMP, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base

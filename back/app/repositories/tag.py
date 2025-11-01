@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from app.models import Tag
 from app.schemas.tag import TagCreate, TagUpdate
 
@@ -23,7 +23,7 @@ class TagRepository:
         return self.db.query(Tag).options(
             joinedload(Tag.category) # Eager-load category
         ).filter(
-            or_(Tag.user_id == None, Tag.user_id == user_id)
+            or_(Tag.user_id.is_(None), Tag.user_id == user_id)
         ).offset(skip).limit(limit).all()
 
     def create(self, tag_data: TagCreate, user_id: Optional[int] = None) -> Tag:

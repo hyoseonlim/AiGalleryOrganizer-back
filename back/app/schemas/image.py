@@ -2,11 +2,10 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from datetime import datetime
 from app.models.image import AIProcessingStatus
 
 class ImageUploadRequest(BaseModel):
-    image_count: int = Field(..., gt=0, description="Number of images to upload")
+    image_count: int = Field(..., gt=0, description="업로드할 이미지 수")
 
 class PresignedUrl(BaseModel):
     image_id: int
@@ -41,7 +40,6 @@ class ImageViewableResponse(BaseModel):
     image_id: int
     url: str
 
-from pydantic import BaseModel, Field
 
 class ImageAnalysisResult(BaseModel):
     tag: str

@@ -12,7 +12,7 @@ class SimilarGroupRepository:
         """사용자의 모든 이미지와 임베딩을 가져옵니다."""
         return self.db.query(Image).filter(
             Image.user_id == user_id, 
-            Image.ai_embedding != None,
+            Image.ai_embedding.isnot(None),
             Image.deleted_at.is_(None)
         ).all()
 

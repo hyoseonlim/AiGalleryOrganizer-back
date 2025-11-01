@@ -7,10 +7,7 @@ from app.services.similar_group_service import SimilarGroupService
 from app.schemas.similar_group import SimilarGroupResponse
 from app.schemas.image import ImageResponse
 
-router = APIRouter(
-    prefix="/similar-groups",
-    tags=["similar-groups"],
-)
+router = APIRouter(tags=["similar-groups"])
 
 @router.post("/", response_model=List[SimilarGroupResponse])
 def find_and_group_images(

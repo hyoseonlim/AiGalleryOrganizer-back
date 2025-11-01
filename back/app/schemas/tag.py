@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 from app.schemas.category import CategoryResponse # Import CategoryResponse
 
 class TagBase(BaseModel):

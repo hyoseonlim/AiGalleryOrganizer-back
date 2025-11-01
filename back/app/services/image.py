@@ -1,6 +1,5 @@
 # app/services/image.py
 import uuid
-import hashlib
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
@@ -9,11 +8,9 @@ from botocore.exceptions import ClientError
 from typing import List
 
 from app.repositories.image import ImageRepository
-from app.schemas.image import ImageUploadResponse, PresignedUrl, UploadCompleteResponse, ImageResponse, ImageMetadata
+from app.schemas.image import ImageUploadResponse, PresignedUrl, ImageResponse, ImageMetadata
 from app.models.user import User
 from app.models.image import Image, AIProcessingStatus
-from app.models.category import Category
-from app.models.tag import Tag
 from app.repositories.category import CategoryRepository
 from app.repositories.tag import TagRepository
 from config.config import settings

@@ -16,7 +16,7 @@ def create_similar_photo_groups(db: Session, user_id: int, eps: float = 0.15, mi
     :param min_samples: DBSCAN의 min_samples 파라미터 (그룹 최소 이미지 수)
     """
     # 1. 사용자의 모든 이미지 임베딩 가져오기
-    images = db.query(Image).filter(Image.user_id == user_id, Image.ai_embedding != None).all()
+    images = db.query(Image).filter(Image.user_id == user_id, Image.ai_embedding.isnot(None)).all()
     
     if len(images) < min_samples:
         return 0, 0 # 그룹을 만들기에 이미지가 충분하지 않음
@@ -49,7 +49,7 @@ def create_similar_photo_groups(db: Session, user_id: int, eps: float = 0.15, mi
         if label == -1:
             continue  # 아웃라이어는 그룹으로 만들지 않음
 
-        cluster_image_ids = [image_ids[i] for i, l in enumerate(labels) if l == label]
+        cluster_image_ids = [image_ids[i] for i, label_ in enumerate(labels) if label_ == label]
         
         # 새 그룹 생성
         new_group = SimilarPhotoGroup(
