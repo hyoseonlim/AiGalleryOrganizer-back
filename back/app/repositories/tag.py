@@ -16,6 +16,9 @@ class TagRepository:
     def find_by_name(self, name: str) -> Optional[Tag]:
         return self.db.query(Tag).filter(Tag.name == name).first()
 
+    def find_by_name_and_category_id(self, name: str, category_id: int) -> Optional[Tag]:
+        return self.db.query(Tag).filter(Tag.name == name, Tag.category_id == category_id).first()
+
     def find_tags_for_user(self, user_id: int, skip: int = 0, limit: int = 100) -> List[Tag]:
         return self.db.query(Tag).options(
             joinedload(Tag.category) # Eager-load category

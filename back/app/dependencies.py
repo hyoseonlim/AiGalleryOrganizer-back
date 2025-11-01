@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.repositories.image import ImageRepository
 from app.repositories.user import UserRepository
-from app.repositories.tag import TagRepository # Added
-from app.repositories.category import CategoryRepository # Added
+from app.repositories.tag import TagRepository
+from app.repositories.category import CategoryRepository
 from app.repositories.similar_group_repository import SimilarGroupRepository
 from app.services.image import ImageService
 from app.services.user import UserService
-from app.services.tag import TagService # Added
-from app.services.category import CategoryService # Added
+from app.services.tag import TagService
+from app.services.category import CategoryService
 from app.services.similar_group_service import SimilarGroupService
 from app.schemas.token import TokenData
 from config.config import settings
@@ -23,11 +23,18 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 def get_image_repository(db: Session = Depends(get_db)) -> ImageRepository:
     return ImageRepository(db)
 
+def get_category_repository(db: Session = Depends(get_db)) -> CategoryRepository:
+    return CategoryRepository(db)
+
+def get_tag_repository(db: Session = Depends(get_db)) -> TagRepository:
+    return TagRepository(db)
 
 def get_image_service(
     image_repository: ImageRepository = Depends(get_image_repository),
+    category_repository: CategoryRepository = Depends(get_category_repository),
+    tag_repository: TagRepository = Depends(get_tag_repository),
 ) -> ImageService:
-    return ImageService(image_repository)
+    return ImageService(image_repository, category_repository, tag_repository)
 
 
 def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
@@ -39,22 +46,13 @@ def get_user_service(
 ) -> UserService:
     return UserService(user_repository)
 
-# Added Tag dependencies
-def get_tag_repository(db: Session = Depends(get_db)) -> TagRepository:
-    return TagRepository(db)
 
 def get_tag_service(
     tag_repository: TagRepository = Depends(get_tag_repository),
-    db: Session = Depends(get_db) # Added db dependency
+    db: Session = Depends(get_db)
 ) -> TagService:
-    # TagService now needs CategoryRepository
-    # This creates a circular dependency if CategoryService also needs TagRepository
-    # Let's pass db directly to TagService and let it create CategoryRepository
-    return TagService(tag_repository, CategoryRepository(db)) # Modified
+    return TagService(tag_repository, CategoryRepository(db))
 
-# Added Category dependencies
-def get_category_repository(db: Session = Depends(get_db)) -> CategoryRepository:
-    return CategoryRepository(db)
 
 def get_category_service(
     category_repository: CategoryRepository = Depends(get_category_repository),
@@ -64,6 +62,7 @@ def get_category_service(
 
 def get_similar_group_repository(db: Session = Depends(get_db)) -> SimilarGroupRepository:
     return SimilarGroupRepository(db)
+
 
 def get_similar_group_service(
     similar_group_repository: SimilarGroupRepository = Depends(get_similar_group_repository),

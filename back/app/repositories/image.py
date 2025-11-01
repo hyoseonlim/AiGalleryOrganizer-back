@@ -24,6 +24,10 @@ class ImageRepository:
             Image.deleted_at.is_(None)
         ).first()
 
+    def find_by_id_for_analysis(self, image_id: int) -> Image | None:
+        """Find an image by its ID, without user or soft-delete filtering, for analysis callbacks."""
+        return self.db.query(Image).filter(Image.id == image_id).first()
+
     def find_by_id_including_trashed(self, image_id: int, user_id: int) -> Image | None:
         """Find an image by its ID and user, including soft-deleted images."""
         return self.db.query(Image).filter(Image.id == image_id, Image.user_id == user_id).first()

@@ -1,40 +1,57 @@
 from app.celery_worker import celery_app
-import httpx # Assuming httpx for async http requests
+import httpx
+from app.schemas.image import ImageAnalysisResult
+from config.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
 
-@celery_app.task # 아래 함수를 Celery 태스크로 등록하는 데코레이터
-def analyze_image_task(image_url: str): # 비동기적으로 실행될 작업 함수
-    logger.info(f"Starting analysis for image: {image_url}") # 이 URL은 FastAPI 엔드포인트에서 analyze_image_task.delay(full_image_url) 형태로 전달됨
+@celery_app.task
+def analyze_image_task(image_id: int, image_url: str):
+    logger.info(f"Starting analysis for image ID: {image_id}, URL: {image_url}")
     try:
-        ai_server_url = "http://ai_server_host:port/analyze" # TODO Placeholder for AI server URL - replace with actual AI server endpoint
-        
-        # Make a request to the AI server
-        # In a real scenario, you'd use httpx.post or similar
-        # For now, simulate a delay and a dummy response
-        
-        # TODO Example using httpx (install with pip install httpx)
-        # 실제 시나리오에서는 httpx와 같은 HTTP 클라이언트 라이브러리를 사용하여 AI 서버에 이미지 URL을 보내고 응답을 받아야 함
-        # async with httpx.AsyncClient() as client:
-        #     response = await client.post(ai_server_url, json={"image_url": image_url})
-        #     response.raise_for_status()
-        #     analysis_results = response.json()
+        # TODO: Replace with actual AI server call to get analysis results
+        # For now, simulate a delay and dummy response
+        import time
+        time.sleep(5) # Simulate AI processing time
 
-        # TODO 실제 AI 서버로부터 받은 분석 결과를 파싱하여 이 변수에 할당하는 로직으로 대체해야 함
-        # Dummy analysis results for now
-        analysis_results = {"image_url": image_url, "status": "completed", "tags": ["nature", "landscape"]}
-        
-        logger.info(f"Analysis completed for {image_url}: {analysis_results}")
+        # Dummy analysis results
+        # These should come from the actual AI server response
+        dummy_tag = "nature"
+        dummy_tag_category = "landscape"
+        dummy_score = 0.95
+        dummy_ai_embedding = [0.1] * 640 # 1x640 vector
 
-        # TODO AI 분석이 완료된 후 해당 결과를 데이터베이스에 저장하는 로직 (예를 들어 app/models에 정의된 모델을 사용하여 db_session.add(...) 및 db_session.commit()과 같은 작업)
-        # Placeholder for saving results to the database
-        # You would typically interact with your database models here
-        # e.g., db_session.add(ImageAnalysisResult(**analysis_results))
-        # db_session.commit()
-        print(f"Saving analysis results to DB: {analysis_results}")
+        # Construct the payload for the general server's API
+        analysis_results_payload = ImageAnalysisResult(
+            tag=dummy_tag,
+            tag_category=dummy_tag_category,
+            score=dummy_score,
+            ai_embedding=dummy_ai_embedding
+        )
 
-        return analysis_results
+        # General server's API endpoint to receive analysis results
+        # This URL should be accessible from where the Celery worker runs
+        general_server_api_url = f"{settings.GENERAL_SERVER_URL}/images/{image_id}/analysis-results"
+
+        logger.info(f"Sending analysis results to general server: {general_server_api_url}")
+
+        # Make the HTTP POST request to the general server
+        response = httpx.post(
+            general_server_api_url,
+            json=analysis_results_payload.model_dump() # Use model_dump() for Pydantic v2
+        )
+        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
+
+        logger.info(f"Analysis results for image ID {image_id} successfully sent to general server.")
+        return {"image_id": image_id, "status": "completed"}
+
+    except httpx.RequestError as e:
+        logger.error(f"HTTP request failed for image ID {image_id}: {e}")
+        raise
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP status error for image ID {image_id}: {e.response.status_code} - {e.response.text}")
+        raise
     except Exception as e:
-        logger.error(f"Error analyzing image {image_url}: {e}") # 예외 발생 시 Celery는 해당 작업을 실패로 표시
+        logger.error(f"Error analyzing or sending results for image ID {image_id}: {e}")
         raise
