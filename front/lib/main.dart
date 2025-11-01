@@ -6,6 +6,7 @@ import 'features/shared/presentation/pages/main_scaffold.dart';
 import 'features/gallery/data/cache/photo_cache_service.dart';
 import 'features/gallery/data/repositories/local_photo_repository.dart';
 import 'features/auth/data/auth_repository.dart';
+import 'features/gallery/presentation/pages/swipe_clean_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -148,6 +149,7 @@ class _MyAppState extends State<MyApp> {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
         '/gallery': (context) => const MainScaffold(),
+        '/swipe-clean': (context) => const SwipeCleanPage(),
       },
     );
   }
