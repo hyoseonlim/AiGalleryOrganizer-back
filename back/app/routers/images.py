@@ -176,10 +176,11 @@ def receive_analysis_results(
     image_service.update_image_analysis_results(
         db=db,
         image_id=image_id,
-        tag=results.tag,
-        tag_category=results.tag_category,
-        score=results.score,
-        ai_embedding=results.ai_embedding,
+        tag_name=results.tag_name,
+        tag_category=results.category,
+        tag_probability=results.probability,
+        score=results.quality_score,
+        ai_embedding=results.feature_vector,
     )
     return {"message": "Analysis results received and processed successfully."}
 

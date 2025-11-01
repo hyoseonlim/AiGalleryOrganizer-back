@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from botocore.exceptions import ClientError
-from typing import List
+from typing import List, Optional
 
 from app.repositories.image import ImageRepository
 from app.schemas.image import (
@@ -157,37 +157,70 @@ class ImageService:
         self,
         db: Session,
         image_id: int,
-        tag: str,
-        tag_category: str,
-        score: float,
-        ai_embedding: List[float],
+        tag_name: str,
+        tag_category: Optional[str],
+        tag_probability: float,
+        score: Optional[float],
+        ai_embedding: Optional[List[float]],
     ) -> Image:
+        """
+        AI 분석 결과를 이미지에 저장합니다.
+
+        Args:
+            image_id: 이미지 ID
+            tag_name: AI가 예측한 태그 이름
+            tag_category: AI가 예측한 카테고리
+            tag_probability: 태그 예측 확률 (%)
+            score: 이미지 품질 점수 (0-1)
+            ai_embedding: 이미지 feature vector
+        """
         image = self.repository.find_by_id_for_analysis(image_id)
         if not image:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
 
-        # Handle Category
-        category = self.category_repository.find_by_name(tag_category)
-        if not category:
-            from app.schemas.category import CategoryCreate # Import locally to avoid circular dependency
-            category_create_schema = CategoryCreate(name=tag_category)
-            category = self.category_repository.create(category_create_schema)
+        # TODO: 임계값 정의 및 적용
+        # - tag_probability가 임계값 이상일 때만 태그 저장
+        # - category_probability가 임계값 이상일 때만 카테고리 연결
+        # 예: TAG_CONFIDENCE_THRESHOLD = 30.0 (%)
 
-        # Handle Tag
-        tag_obj = self.tag_repository.find_by_name_and_category_id(tag, category.id)
-        if not tag_obj:
-            from app.schemas.tag import TagCreate # Import locally to avoid circular dependency
-            tag_create_schema = TagCreate(name=tag, category_id=category.id)
-            tag_obj = self.tag_repository.create(tag_create_schema)
+        # Handle Category and Tag
+        if tag_category:
+            category = self.category_repository.find_by_name(tag_category)
+            if not category:
+                from app.schemas.category import CategoryCreate
+                category_create_schema = CategoryCreate(name=tag_category)
+                category = self.category_repository.create(category_create_schema)
+
+            # Handle Tag
+            tag_obj = self.tag_repository.find_by_name_and_category_id(tag_name, category.id)
+            if not tag_obj:
+                from app.schemas.tag import TagCreate
+                tag_create_schema = TagCreate(name=tag_name, category_id=category.id)
+                tag_obj = self.tag_repository.create(tag_create_schema)
+
+            # ImageTag에 태그 추가 (confidence 포함)
+            from app.models.association import ImageTag
+            existing_image_tag = db.query(ImageTag).filter_by(
+                image_id=image.id,
+                tag_id=tag_obj.id
+            ).first()
+
+            if not existing_image_tag:
+                image_tag = ImageTag(
+                    image_id=image.id,
+                    tag_id=tag_obj.id,
+                    confidence=tag_probability / 100.0  # 백분율을 0-1 범위로 변환
+                )
+                db.add(image_tag)
 
         # Update Image
-        updated_image = self.repository.update(
-            image,
-            ai_embedding=ai_embedding,
-            score=score,
-            tag_id=tag_obj.id,
-            ai_processing_status=AIProcessingStatus.COMPLETED
-        )
+        update_data = {"ai_processing_status": AIProcessingStatus.COMPLETED}
+        if ai_embedding is not None:
+            update_data["ai_embedding"] = ai_embedding
+        if score is not None:
+            update_data["score"] = score
+
+        updated_image = self.repository.update(image, **update_data)
         self.repository.db.commit()
         self.repository.db.refresh(updated_image)
         return updated_image

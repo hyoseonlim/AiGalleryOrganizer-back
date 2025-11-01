@@ -123,7 +123,7 @@ def worker_init(self):
 
 
 # 백엔드로 결과 전송
-def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> bool:
+def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None, image_id: str = None) -> bool:
     """
     분석 결과를 백엔드 API로 전송합니다.
 
@@ -142,7 +142,6 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
             result_data['task_id'] = task_id
 
         # image_id로 URL 동적 생성
-        image_id = result_data.get('image_id')
         if image_id:
             api_url = BACKEND_API_URL.format(image_id=image_id)
         else:
@@ -151,17 +150,10 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
 
         logger.info(f"📤 Sending result to backend: {api_url}")
         logger.info(f"📊 Analysis Result Summary:")
-        logger.info(f"   • Tag: {result_data.get('tag_name', 'N/A')} ({result_data.get('probability', 0):.2f}%)")
-
-        category_prob = result_data.get('category_probability')
-        category_prob_str = f"({category_prob:.2f}%)" if category_prob is not None else "(N/A)"
-        logger.info(f"   • Category: {result_data.get('category', 'N/A')} {category_prob_str}")
-
-        quality_score = result_data.get('quality_score')
-        quality_str = f"{quality_score:.4f}" if quality_score is not None else "N/A"
-        logger.info(f"   • Quality Score: {quality_str}")
-
-        logger.info(f"   • Image ID: {result_data.get('image_id', 'N/A')}")
+        logger.info(f"   • Tag: {result_data.get('tag_name', 'N/A')} (probability: {result_data.get('probability', 0):.2f}%)")
+        logger.info(f"   • Category: {result_data.get('category', 'N/A')} (probability: {result_data.get('category_probability', 0):.2f}%)")
+        logger.info(f"   • Quality Score: {result_data.get('quality_score', 'N/A')}")
+        logger.info(f"   • Feature Vector size: {len(result_data.get('feature_vector', []))}")
         logger.debug(f"🔍 Full result data: {json.dumps(result_data, indent=2)}")
 
         response = requests.post(
@@ -275,27 +267,33 @@ def analyze_image_task(
             except Exception as e:
                 logger.warning(f"Hierarchical classification failed: {e}")
 
-        # 결과 생성
+        # 백엔드 API 형식에 맞춰 결과 생성 (ImageAnalysisResult 스키마)
         result = {
             'tag_name': class_name,
-            'probability': round(probability, 2),
-            'category': recommended_high_tag,
+            'probability': round(probability, 2),  # 태그 예측 확률 (%)
+            'category': recommended_high_tag if recommended_high_tag else 'Unknown',
             'category_probability': round(recommended_high_tag_prob, 2) if recommended_high_tag_prob else None,
             'quality_score': round(quality_score, 4) if quality_score else None,
-            'feature_vector': feature_vector,
+            'feature_vector': feature_vector[0] if feature_vector else []  # 첫 번째 배치의 임베딩
+        }
+
+        # 추가 메타데이터 (로깅용)
+        result_metadata = {
+            'probability_percent': round(probability, 2),
+            'category_probability': round(recommended_high_tag_prob, 2) if recommended_high_tag_prob else None,
+            'quality_score': round(quality_score, 4) if quality_score else None,
             'image_url': image_url,
         }
 
-        # 추가 메타데이터
         if image_id:
-            result['image_id'] = image_id
+            result_metadata['image_id'] = image_id
         if user_id:
-            result['user_id'] = user_id
+            result_metadata['user_id'] = user_id
 
         logger.info(f"[Task {self.request.id}] Analysis complete: {class_name} ({probability:.2f}%)")
 
         # 백엔드로 결과 전송
-        send_success = send_result_to_backend(result, task_id=self.request.id)
+        send_success = send_result_to_backend(result, task_id=self.request.id, image_id=image_id)
         result['sent_to_backend'] = send_success
 
         return result
@@ -303,18 +301,17 @@ def analyze_image_task(
     except Exception as e:
         logger.error(f"[Task {self.request.id}] Error analyzing image: {e}")
 
-        # 에러 정보를 백엔드로 전송
+        # 에러 정보를 백엔드로 전송 (ImageAnalysisResult 스키마 형식)
         error_result = {
-            'error': str(e),
-            'image_url': image_url,
-            'status': 'failed'
+            'tag_name': 'error',
+            'probability': 0.0,
+            'category': 'Unknown',
+            'category_probability': None,
+            'quality_score': None,
+            'feature_vector': []
         }
-        if image_id:
-            error_result['image_id'] = image_id
-        if user_id:
-            error_result['user_id'] = user_id
 
-        send_result_to_backend(error_result, task_id=self.request.id)
+        send_result_to_backend(error_result, task_id=self.request.id, image_id=image_id)
 
         raise
 
