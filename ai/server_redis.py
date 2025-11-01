@@ -245,6 +245,8 @@ def analyze_image_task(
         top_probability, top_class_index = torch.topk(logits.softmax(dim=1) * 100, k=1)
 
         class_name = model.config.id2label[top_class_index[0][0].item()]
+        # comma로 구분된 경우 첫 번째 태그만 추출
+        class_name = class_name.split(',')[0].strip()
         probability = top_probability[0][0].item()
 
         # Feature vector 추출
