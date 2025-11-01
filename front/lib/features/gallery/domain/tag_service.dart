@@ -402,57 +402,159 @@ Future<List<PhotoTag>> fetchAiTagsForImage(int imageId) async {
 
 /// 이미지 상세 정보 조회 (태그 포함)
 /// Get detailed image information including tags
-/// This fetches the image from backend and updates the local Photo with remote tags
+/// OpenAPI: GET /api/images/{image_id}/detail
+/// Response:
+/// {
+///   "id": 0,
+///   "url": "string",
+///   "hash": "string",
+///   "size": 0,
+///   "uploaded_at": "2025-11-01T22:38:49.637Z",
+///   "ai_processing_status": "PENDING",
+///   "score": 0,
+///   "exif": {
+///     "additionalProp1": {}
+///   },
+///   "tags": []
+/// }
 Future<Photo?> fetchImageDetails(String photoId) async {
   try {
     final imageId = int.parse(photoId);
     await NetworkPolicyService.instance.ensureAllowedConnectivity();
 
-    // Get all user images and find the specific one
-    final uri = Uri.parse('$_baseUrl/api/users/me/images');
+    // Get image detail from new API
+    final uri = Uri.parse('$_baseUrl/api/images/$imageId/detail');
     _log('이미지 상세 정보 조회: $photoId');
 
     final headers = await _getAuthHeaders();
     final response = await http.get(uri, headers: headers);
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as List<dynamic>;
-      final images = data
-          .map((item) => ImageResponse.fromMap(item as Map<String, dynamic>))
-          .toList();
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      _log('이미지 상세 정보 API 응답: $data', level: LogLevel.debug);
 
-      // Find the specific image
-      final imageResponse = images.firstWhere(
-        (img) => img.id == imageId,
-        orElse: () => throw Exception('Image not found'),
-      );
+      // Extract basic info
+      final url = data['url'] as String?;
+      final size = data['size'] as int?;
+      final uploadedAt = data['uploaded_at'] as String?;
+      final exif = data['exif'] as Map<String, dynamic>?;
+      final tagsData = data['tags'] as List<dynamic>?;
 
-      _log('이미지 상세 정보 조회 성공: $photoId');
+      // Parse EXIF data for metadata
+      String? camera;
+      String? resolution;
+      double? latitude;
+      double? longitude;
+      DateTime? dateTaken;
 
-      // 카테고리별로 AI 태그 조회 (category:tag_name 형식)
-      final systemTags = await fetchAiTagsForImage(imageId);
-      _log('AI 태그 조회 완료: ${systemTags.length}개');
+      if (exif != null) {
+        // EXIF 데이터에서 메타데이터 추출
+        camera = exif['Make'] as String? ?? exif['Model'] as String?;
+        if (camera == null && exif['Make'] != null && exif['Model'] != null) {
+          camera = '${exif['Make']} ${exif['Model']}';
+        }
 
-      // Create Photo object with updated AI tags
+        // 해상도
+        final width = exif['ImageWidth'] ?? exif['PixelXDimension'];
+        final height = exif['ImageHeight'] ?? exif['PixelYDimension'];
+        if (width != null && height != null) {
+          resolution = '${width}x${height}';
+        }
+
+        // GPS 정보
+        latitude = exif['GPSLatitude'] as double?;
+        longitude = exif['GPSLongitude'] as double?;
+
+        // 촬영 날짜
+        final dateTimeOriginal = exif['DateTimeOriginal'] as String?;
+        if (dateTimeOriginal != null) {
+          try {
+            dateTaken = DateTime.parse(dateTimeOriginal);
+          } catch (e) {
+            _log('날짜 파싱 오류: $dateTimeOriginal', level: LogLevel.warning);
+          }
+        }
+      }
+
+      // Parse tags from response
+      final allTags = <PhotoTag>[];
+      final Map<String, List<String>> categoryTagMap = {};
+
+      if (tagsData != null) {
+        for (final item in tagsData) {
+          if (item is Map<String, dynamic>) {
+            final tagName = item['name'] as String?;
+            final categoryInfo = item['category'] as Map<String, dynamic>?;
+
+            if (tagName != null && categoryInfo != null) {
+              final categoryName = categoryInfo['name'] as String?;
+
+              if (categoryName != null) {
+                // 카테고리별로 태그 그룹화
+                if (!categoryTagMap.containsKey(categoryName)) {
+                  categoryTagMap[categoryName] = [];
+                }
+                categoryTagMap[categoryName]!.add(tagName);
+              }
+            }
+          }
+        }
+      }
+
+      // 카테고리와 하위 태그를 PhotoTag 리스트로 변환
+      for (final entry in categoryTagMap.entries) {
+        final categoryName = entry.key;
+        final tags = entry.value;
+
+        // 카테고리 자체를 태그로 추가
+        allTags.add(PhotoTag(
+          id: 'category:$categoryName',
+          name: categoryName,
+          type: TagType.system,
+          category: null,
+        ));
+
+        // 카테고리에 속한 각 태그 추가
+        for (final tagName in tags) {
+          allTags.add(PhotoTag(
+            id: '$categoryName:$tagName',
+            name: tagName,
+            type: TagType.system,
+            category: categoryName,
+          ));
+        }
+      }
+
+      _log('이미지 상세 정보 조회 성공: $photoId, 태그: ${allTags.length}개');
+
+      // Create Photo object with all metadata
       final photo = Photo(
         id: photoId,
         url: 'cache://$photoId',
-        remoteUrl: imageResponse.url,
-        fileName: imageResponse.url?.split('/').last ?? 'image_$photoId',
-        createdAt: imageResponse.uploadedAt,
-        fileSize: imageResponse.fileSize,
+        remoteUrl: url,
+        fileName: url?.split('/').last ?? 'image_$photoId',
+        createdAt: uploadedAt != null ? DateTime.parse(uploadedAt) : null,
+        fileSize: size,
         metadata: PhotoMetadata(
-          systemTags: systemTags,
+          systemTags: allTags,
           userTags: [], // User tags should be preserved from existing photo
-          additionalInfo: imageResponse.metadata?.toMap(),
+          camera: camera,
+          resolution: resolution,
+          latitude: latitude,
+          longitude: longitude,
+          dateTaken: dateTaken,
+          exifData: exif,
         ),
         uploadStatus: UploadStatus.completed,
       );
 
       return photo;
+    } else if (response.statusCode == 404) {
+      _log('이미지를 찾을 수 없음: $photoId', level: LogLevel.warning);
+      return null;
     } else {
       _log(
-        '이미지 상세 정보 조회 실패 (status: ${response.statusCode})',
+        '이미지 상세 정보 조회 실패 (status: ${response.statusCode}): ${response.body}',
         level: LogLevel.error,
       );
       return null;
