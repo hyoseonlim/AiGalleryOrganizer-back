@@ -7,6 +7,7 @@ import 'package:front/features/gallery/data/repositories/local_photo_repository.
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'dart:io';
 import 'photo_detail_page.dart';
+import '../widgets/upload_progress_widget.dart';
 
 class GalleryPage extends StatefulWidget {
   const GalleryPage({super.key});
@@ -159,7 +160,17 @@ class _GalleryPageState extends State<GalleryPage> {
         onProgress: (current, total) {
           _uploadStateService.updateProgress(current, total);
         },
-        onPhotoSaved: _onPhotoSaved,
+        onPhotoSaved: (photo) {
+          // 새 이미지 업로드 추적 시작
+          _uploadStateService.addImageUpload(photo.id, photo.fileName ?? 'Unknown');
+          _onPhotoSaved(photo);
+        },
+        onStepCompleted: (photoId, step) {
+          _uploadStateService.completeImageStep(photoId, step);
+        },
+        onStepFailed: (photoId, step, error) {
+          _uploadStateService.failImageStep(photoId, step, error);
+        },
       );
 
       _uploadStateService.finishUpload();
@@ -192,7 +203,17 @@ class _GalleryPageState extends State<GalleryPage> {
         onProgress: (current, total) {
           _uploadStateService.updateProgress(current, total);
         },
-        onPhotoSaved: _onPhotoSaved,
+        onPhotoSaved: (photo) {
+          // 새 이미지 업로드 추적 시작
+          _uploadStateService.addImageUpload(photo.id, photo.fileName ?? 'Unknown');
+          _onPhotoSaved(photo);
+        },
+        onStepCompleted: (photoId, step) {
+          _uploadStateService.completeImageStep(photoId, step);
+        },
+        onStepFailed: (photoId, step, error) {
+          _uploadStateService.failImageStep(photoId, step, error);
+        },
       );
 
       _uploadStateService.finishUpload();
@@ -225,7 +246,17 @@ class _GalleryPageState extends State<GalleryPage> {
         onProgress: (current, total) {
           _uploadStateService.updateProgress(current, total);
         },
-        onPhotoSaved: _onPhotoSaved,
+        onPhotoSaved: (photo) {
+          // 새 이미지 업로드 추적 시작
+          _uploadStateService.addImageUpload(photo.id, photo.fileName ?? 'Unknown');
+          _onPhotoSaved(photo);
+        },
+        onStepCompleted: (photoId, step) {
+          _uploadStateService.completeImageStep(photoId, step);
+        },
+        onStepFailed: (photoId, step, error) {
+          _uploadStateService.failImageStep(photoId, step, error);
+        },
       );
 
       _uploadStateService.finishUpload();
@@ -427,13 +458,56 @@ class _GalleryPageState extends State<GalleryPage> {
               ],
             ),
             // Upload progress indicator on the left side
-            if (_uploadStateService.isUploading)
+            if (_uploadStateService.isUploading || _uploadStateService.allUploads.isNotEmpty)
               Positioned(
                 left: 16,
                 bottom: 16,
-                child: _UploadProgressIndicator(
-                  current: _uploadStateService.uploadCurrent,
-                  total: _uploadStateService.uploadTotal,
+                child: ExpandableUploadProgress(
+                  overallProgress: _uploadStateService.overallProgress,
+                  activeUploads: _uploadStateService.activeUploads,
+                  completedUploads: _uploadStateService.completedUploads,
+                  onRetry: (photoId) async {
+                    // 재시도 처리: 로컬에서 원본 파일을 가져와 재업로드
+                    try {
+                      final photo = _allPhotos.firstWhere((p) => p.id == photoId);
+                      final originalFile = await _localRepo.getOriginalPhoto(photoId);
+
+                      if (originalFile != null) {
+                        // 실패 상태 초기화
+                        _uploadStateService.retryImage(photoId);
+
+                        // 재업로드 시작
+                        await retryUpload(
+                          photo,
+                          originalFile,
+                          onStepCompleted: (retryPhotoId, step) {
+                            _uploadStateService.completeImageStep(retryPhotoId, step);
+                          },
+                          onStepFailed: (retryPhotoId, step, error) {
+                            _uploadStateService.failImageStep(retryPhotoId, step, error);
+                          },
+                        );
+                      } else {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('원본 파일을 찾을 수 없습니다'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('재시도 중 오류: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
                 ),
               ),
           ],
@@ -740,274 +814,4 @@ class _PhotoItem extends StatelessWidget {
     );
   }
 
-}
-
-class _UploadProgressIndicator extends StatelessWidget {
-  final int current;
-  final int total;
-
-  const _UploadProgressIndicator({
-    required this.current,
-    required this.total,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = total > 0 ? current / total : 0.0;
-
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Circular progress indicator
-          SizedBox(
-            width: 64,
-            height: 64,
-            child: CircularProgressIndicator(
-              value: progress,
-              strokeWidth: 4,
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).primaryColor,
-              ),
-            ),
-          ),
-          // Text showing progress
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$current',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                '/ $total',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Search bottom sheet widget
-class _SearchBottomSheet extends StatefulWidget {
-  final TextEditingController searchController;
-  final List<Photo> allPhotos;
-  final Function(String) onPhotoTap;
-
-  const _SearchBottomSheet({
-    required this.searchController,
-    required this.allPhotos,
-    required this.onPhotoTap,
-  });
-
-  @override
-  State<_SearchBottomSheet> createState() => _SearchBottomSheetState();
-}
-
-class _SearchBottomSheetState extends State<_SearchBottomSheet> {
-  List<Photo> _filteredPhotos = [];
-  final _localRepo = LocalPhotoRepository();
-
-  @override
-  void initState() {
-    super.initState();
-    _filteredPhotos = widget.allPhotos;
-    widget.searchController.addListener(_filterPhotos);
-  }
-
-  @override
-  void dispose() {
-    widget.searchController.removeListener(_filterPhotos);
-    super.dispose();
-  }
-
-  void _filterPhotos() {
-    final query = widget.searchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredPhotos = widget.allPhotos;
-      } else {
-        _filteredPhotos = widget.allPhotos.where((photo) {
-          // Search by filename
-          final fileName = (photo.fileName ?? '').toLowerCase();
-          // Search by tags
-          final systemTags = photo.metadata.systemTags.join(' ').toLowerCase();
-          final userTags = photo.metadata.userTags.join(' ').toLowerCase();
-
-          return fileName.contains(query) ||
-                 systemTags.contains(query) ||
-                 userTags.contains(query);
-        }).toList();
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Drag handle
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // Search bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: TextField(
-                  controller: widget.searchController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: '파일명, 태그로 검색',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: widget.searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              widget.searchController.clear();
-                            },
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-              ),
-              // Search results count
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${_filteredPhotos.length}개의 사진',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-              const Divider(height: 1),
-              // Results grid
-              Expanded(
-                child: _filteredPhotos.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '검색 결과가 없습니다',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : GridView.builder(
-                        controller: scrollController,
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
-                        itemCount: _filteredPhotos.length,
-                        itemBuilder: (context, index) {
-                          final photo = _filteredPhotos[index];
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.pop(context);
-                              widget.onPhotoTap(photo.id);
-                            },
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: FutureBuilder<File?>(
-                                future: _localRepo.getThumbnail(photo.id),
-                                builder: (context, snapshot) {
-                                  if (snapshot.hasData && snapshot.data != null) {
-                                    return Image.file(
-                                      snapshot.data!,
-                                      fit: BoxFit.cover,
-                                    );
-                                  } else {
-                                    return Container(
-                                      color: Colors.grey[300],
-                                      child: const Center(
-                                        child: Icon(Icons.image, color: Colors.grey),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 }

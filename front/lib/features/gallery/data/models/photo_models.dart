@@ -559,3 +559,117 @@ class ImageViewableResponse {
   @override
   String toString() => 'ImageViewableResponse(url: $url, expiresAt: $expiresAt)';
 }
+
+/// 이미지 업로드 프로세스의 각 단계
+enum ImageUploadStep {
+  thumbnail,  // 썸네일 생성 및 캐시 & 로컬 레포에 정보 저장
+  upload,     // image upload service & callback
+  tagging,    // image automatic tag list get
+}
+
+/// 단일 이미지의 업로드 진행 상황
+class ImageUploadProgress {
+  final String photoId;
+  final String fileName;
+  final Map<ImageUploadStep, bool> stepCompleted;
+  final ImageUploadStep? failedStep;
+  final String? errorMessage;
+
+  const ImageUploadProgress({
+    required this.photoId,
+    required this.fileName,
+    required this.stepCompleted,
+    this.failedStep,
+    this.errorMessage,
+  });
+
+  /// 전체 진행률 (0.0 ~ 1.0)
+  double get progress {
+    final completedCount = stepCompleted.values.where((v) => v).length;
+    return completedCount / ImageUploadStep.values.length;
+  }
+
+  /// 모든 단계 완료 여부
+  bool get isCompleted => stepCompleted.values.every((v) => v) && failedStep == null;
+
+  /// 실패 여부
+  bool get isFailed => failedStep != null;
+
+  /// 현재 진행 중인 단계
+  ImageUploadStep? get currentStep {
+    if (failedStep != null) return failedStep;
+    for (final step in ImageUploadStep.values) {
+      if (!stepCompleted[step]!) {
+        return step;
+      }
+    }
+    return null;
+  }
+
+  /// 단계 완료 표시
+  ImageUploadProgress completeStep(ImageUploadStep step) {
+    final newSteps = Map<ImageUploadStep, bool>.from(stepCompleted);
+    newSteps[step] = true;
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: newSteps,
+      failedStep: null,
+      errorMessage: null,
+    );
+  }
+
+  /// 단계 실패 표시
+  ImageUploadProgress failStep(ImageUploadStep step, String error) {
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: stepCompleted,
+      failedStep: step,
+      errorMessage: error,
+    );
+  }
+
+  /// 재시도를 위해 실패 상태 초기화
+  ImageUploadProgress resetFailure() {
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: stepCompleted,
+      failedStep: null,
+      errorMessage: null,
+    );
+  }
+
+  factory ImageUploadProgress.initial({
+    required String photoId,
+    required String fileName,
+  }) {
+    return ImageUploadProgress(
+      photoId: photoId,
+      fileName: fileName,
+      stepCompleted: {
+        for (var step in ImageUploadStep.values) step: false,
+      },
+    );
+  }
+
+  ImageUploadProgress copyWith({
+    String? photoId,
+    String? fileName,
+    Map<ImageUploadStep, bool>? stepCompleted,
+    ImageUploadStep? failedStep,
+    String? errorMessage,
+  }) {
+    return ImageUploadProgress(
+      photoId: photoId ?? this.photoId,
+      fileName: fileName ?? this.fileName,
+      stepCompleted: stepCompleted ?? this.stepCompleted,
+      failedStep: failedStep,
+      errorMessage: errorMessage,
+    );
+  }
+
+  @override
+  String toString() => 'ImageUploadProgress(photoId: $photoId, fileName: $fileName, progress: ${(progress * 100).toStringAsFixed(0)}%, failed: $isFailed)';
+}

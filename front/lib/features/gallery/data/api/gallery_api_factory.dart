@@ -22,6 +22,7 @@ class GalleryApiFactory {
     image = ImageApi(_client);
     trash = TrashApi(_client);
     download = DownloadApi(_client);
+    // tag = TagApi(_client);
   }
 
   /// 싱글톤 인스턴스
