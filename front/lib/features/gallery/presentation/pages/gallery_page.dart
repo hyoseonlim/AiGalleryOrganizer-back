@@ -11,6 +11,7 @@ import 'dart:io';
 import 'dart:developer' as developer;
 import 'photo_detail_page.dart';
 import 'swipe_clean_page.dart';
+import 'trash_page.dart';
 import '../widgets/upload_progress_widget.dart';
 import '../widgets/duplicate_detection_dialog.dart';
 
@@ -860,15 +861,33 @@ class _GalleryPageState extends State<GalleryPage> {
       title: const Text('AI Gallery'),
       actions: [
         PopupMenuButton<String>(
-          onSelected: (value) {
+          onSelected: (value) async {
             if (value == 'select') {
               _photoSelectionService.toggleMultiSelectMode();
+            } else if (value == 'trash') {
+              final result = await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TrashPage()),
+              );
+              // Reload photos if any were restored
+              if (result == true && mounted) {
+                await _loadPhotos();
+              }
             }
             // TODO: Handle other options like sort
           },
           itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
             const PopupMenuItem<String>(value: 'sort', child: Text('정렬')),
             const PopupMenuItem<String>(value: 'select', child: Text('선택')),
+            const PopupMenuItem<String>(
+              value: 'trash',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline, size: 20),
+                  SizedBox(width: 12),
+                  Text('휴지통'),
+                ],
+              ),
+            ),
           ],
         ),
       ],

@@ -2,24 +2,18 @@ import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:front/core/network/network_policy_service.dart';
+import 'package:front/features/auth/data/auth_repository.dart';
 
 import '../data/models/photo_models.dart';
 
 // Backend server configuration
 const String _baseUrl = 'http://localhost:8000';
-const String _softDeleteEndpoint = '/api/images';
-const String _restoreEndpoint = '/api/images';
-const String _permanentDeleteEndpoint = '/api/images/trash';
-const String _trashListEndpoint = '/api/images/trash';
 
-// TODO: 실제 인증 토큰을 가져오는 함수로 교체 필요
-String? _getAuthToken() {
-  // 임시로 null 반환. SharedPreferences나 secure storage에서 토큰 가져오기
-  return null;
-}
+// Auth repository instance
+final _authRepository = AuthRepository();
 
-Map<String, String> _getAuthHeaders() {
-  final token = _getAuthToken();
+Future<Map<String, String>> _getAuthHeaders() async {
+  final token = await _authRepository.getAccessToken();
   return {
     'Content-Type': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
@@ -41,14 +35,16 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
 
 /// 이미지를 소프트 삭제 (휴지통으로 이동)
 /// Soft delete an image. The image will be moved to trash.
+/// OpenAPI: DELETE /api/images/{image_id}
 Future<Map<String, dynamic>> softDeleteImage(int imageId) async {
   try {
     await NetworkPolicyService.instance.ensureAllowedConnectivity();
-    final uri = Uri.parse('$_baseUrl$_softDeleteEndpoint/$imageId');
+    final uri = Uri.parse('$_baseUrl/api/images/$imageId');
 
     _log('이미지 소프트 삭제 요청: $imageId');
 
-    final response = await http.delete(uri, headers: _getAuthHeaders());
+    final headers = await _getAuthHeaders();
+    final response = await http.delete(uri, headers: headers);
 
     if (response.statusCode == 204) {
       _log('이미지 소프트 삭제 성공: $imageId', level: LogLevel.info);
@@ -122,14 +118,16 @@ Future<Map<String, dynamic>> softDeleteMultipleImages(
 
 /// 휴지통에서 이미지 복원
 /// Restore a soft-deleted image from trash
+/// OpenAPI: POST /api/images/{image_id}/restore
 Future<Map<String, dynamic>> restoreImage(int imageId) async {
   try {
     await NetworkPolicyService.instance.ensureAllowedConnectivity();
-    final uri = Uri.parse('$_baseUrl$_restoreEndpoint/$imageId/restore');
+    final uri = Uri.parse('$_baseUrl/api/images/$imageId/restore');
 
     _log('이미지 복원 요청: $imageId');
 
-    final response = await http.post(uri, headers: _getAuthHeaders());
+    final headers = await _getAuthHeaders();
+    final response = await http.post(uri, headers: headers);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -205,14 +203,16 @@ Future<Map<String, dynamic>> restoreMultipleImages(
 
 /// 휴지통에서 이미지를 영구 삭제
 /// Permanently delete an image from trash and S3
+/// OpenAPI: DELETE /api/images/trash/{image_id}
 Future<Map<String, dynamic>> permanentlyDeleteImage(int imageId) async {
   try {
     await NetworkPolicyService.instance.ensureAllowedConnectivity();
-    final uri = Uri.parse('$_baseUrl$_permanentDeleteEndpoint/$imageId');
+    final uri = Uri.parse('$_baseUrl/api/images/trash/$imageId');
 
     _log('이미지 영구 삭제 요청: $imageId');
 
-    final response = await http.delete(uri, headers: _getAuthHeaders());
+    final headers = await _getAuthHeaders();
+    final response = await http.delete(uri, headers: headers);
 
     if (response.statusCode == 204) {
       _log('이미지 영구 삭제 성공: $imageId', level: LogLevel.info);
@@ -285,13 +285,15 @@ Future<Map<String, dynamic>> permanentlyDeleteMultipleImages(
 
 /// 휴지통의 모든 이미지 조회
 /// Get all soft-deleted images for the current user
-Future<List<ImageResponse>> getTrashedImages() async {
+/// OpenAPI: GET /api/images/trash
+Future<Map<String, dynamic>> getTrashedImages() async {
   try {
     await NetworkPolicyService.instance.ensureAllowedConnectivity();
-    final uri = Uri.parse('$_baseUrl$_trashListEndpoint');
+    final uri = Uri.parse('$_baseUrl/api/images/trash');
     _log('휴지통 이미지 목록 조회');
 
-    final response = await http.get(uri, headers: _getAuthHeaders());
+    final headers = await _getAuthHeaders();
+    final response = await http.get(uri, headers: headers);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;
@@ -299,16 +301,68 @@ Future<List<ImageResponse>> getTrashedImages() async {
           .map((item) => ImageResponse.fromMap(item as Map<String, dynamic>))
           .toList();
       _log('휴지통 이미지 목록 조회 성공: ${images.length}개');
-      return images;
+      return {
+        'success': true,
+        'images': images,
+        'count': images.length,
+      };
     } else {
       _log(
         '휴지통 이미지 목록 조회 실패 (status: ${response.statusCode})',
         level: LogLevel.error,
       );
-      throw Exception('휴지통 이미지 목록 조회 실패: ${response.statusCode}');
+      return {
+        'success': false,
+        'error': 'Status ${response.statusCode}',
+        'message': response.body,
+      };
     }
   } catch (e) {
     _log('휴지통 이미지 목록 조회 오류: $e', level: LogLevel.error, error: e);
-    rethrow;
+    return {
+      'success': false,
+      'error': e.toString(),
+    };
+  }
+}
+
+/// 휴지통 비우기 (모든 이미지 영구 삭제)
+/// Empty trash by permanently deleting all trashed images
+/// Note: OpenAPI doesn't have a bulk empty endpoint, so we get all trashed images and delete them one by one
+Future<Map<String, dynamic>> emptyTrash() async {
+  try {
+    _log('휴지통 비우기 요청');
+
+    // First, get all trashed images
+    final trashedResult = await getTrashedImages();
+    if (trashedResult['success'] != true) {
+      return trashedResult;
+    }
+
+    final images = trashedResult['images'] as List<ImageResponse>? ?? [];
+    if (images.isEmpty) {
+      _log('휴지통이 이미 비어있음');
+      return {
+        'success': true,
+        'message': '휴지통이 이미 비어있습니다',
+        'deletedCount': 0,
+      };
+    }
+
+    // Delete all images
+    final imageIds = images.map((img) => img.id).toList();
+    final deleteResult = await permanentlyDeleteMultipleImages(imageIds);
+
+    _log('휴지통 비우기 완료: ${deleteResult['successCount']}개 삭제');
+
+    return {
+      'success': deleteResult['success'],
+      'message': '휴지통이 비워졌습니다',
+      'deletedCount': deleteResult['successCount'],
+      'failedCount': deleteResult['failedCount'],
+    };
+  } catch (e) {
+    _log('휴지통 비우기 오류', level: LogLevel.error, error: e);
+    return {'success': false, 'error': e.toString()};
   }
 }

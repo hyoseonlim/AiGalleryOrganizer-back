@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
 import 'package:front/core/network/network_policy_service.dart';
+import 'package:front/features/auth/data/auth_repository.dart';
 
 import '../data/cache/photo_cache_service.dart';
 import '../data/models/photo_models.dart';
@@ -12,14 +13,11 @@ import '../data/models/photo_models.dart';
 const String _baseUrl = 'http://localhost:8000';
 const String _imageViewEndpoint = '/api/images';
 
-// TODO: 실제 인증 토큰을 가져오는 함수로 교체 필요
-String? _getAuthToken() {
-  // 임시로 null 반환. SharedPreferences나 secure storage에서 토큰 가져오기
-  return null;
-}
+// Auth repository instance
+final _authRepository = AuthRepository();
 
-Map<String, String> _getAuthHeaders() {
-  final token = _getAuthToken();
+Future<Map<String, String>> _getAuthHeaders() async {
+  final token = await _authRepository.getAccessToken();
   return {
     'Content-Type': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
@@ -47,7 +45,8 @@ Future<ImageViewableResponse?> getImageViewUrl(int imageId) async {
 
     _log('이미지 view URL 조회: $imageId');
 
-    final response = await http.get(uri, headers: _getAuthHeaders());
+    final headers = await _getAuthHeaders();
+    final response = await http.get(uri, headers: headers);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;

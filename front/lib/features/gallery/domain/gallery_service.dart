@@ -53,6 +53,9 @@ Future<List<Photo>> loadPhotosFromBackend({
           // 캐시 히트: 로컬 썸네일 사용
           _log('썸네일 캐시 히트: $imageId', level: LogLevel.debug);
 
+          // 디버깅: AI 태그 확인
+          _log('이미지 $imageId AI 태그: ${imageResponse.aiTags}', level: LogLevel.debug);
+
           final photo = Photo(
             id: imageId,
             url: 'cache://$imageId', // 로컬 캐시 경로

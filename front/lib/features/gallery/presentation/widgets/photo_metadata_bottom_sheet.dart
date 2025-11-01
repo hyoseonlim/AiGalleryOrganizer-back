@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/models/photo_models.dart';
-import '../../domain/tag_management_service.dart';
+import '../../domain/tag_service.dart';
 import '../../domain/photo_detail_state_service.dart';
 
 class PhotoMetadataBottomSheet extends StatefulWidget {
@@ -397,7 +397,7 @@ class _TagChip extends StatelessWidget {
     final isSystemTag = tag.type == TagType.system;
 
     return Chip(
-      label: Text(tag.name),
+      label: Text(tag.displayName), // category:tag_name 형식으로 표시
       backgroundColor: isSystemTag
           ? Colors.blue.withValues(alpha: 0.1)
           : Colors.green.withValues(alpha: 0.1),

@@ -5,6 +5,8 @@ import '../../data/models/photo_models.dart';
 import '../../data/repositories/local_photo_repository.dart';
 import '../../di/gallery_service_locator.dart';
 import '../../domain/photo_detail_state_service.dart';
+import '../../domain/tag_service.dart' as tag_service;
+import '../../domain/trash_service.dart';
 import '../widgets/photo_detail_app_bar.dart';
 import '../widgets/photo_viewer.dart';
 import '../widgets/photo_detail_bottom_bar.dart';
@@ -81,7 +83,7 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('사진 삭제'),
-        content: const Text('이 사진을 삭제하시겠습니까?'),
+        content: const Text('이 사진을 휴지통으로 이동하시겠습니까?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -97,33 +99,78 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
     );
 
     if (confirmed == true && mounted) {
-      // Delete from local repository
-      final success = await _localRepo.deletePhoto(photo.id);
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 16),
+              Text('삭제 중...'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
 
-      if (success) {
-        // Remove from state
-        _stateService.removeCurrentPhoto();
+      try {
+        // Soft delete from backend (move to trash)
+        final imageId = int.parse(photo.id);
+        final result = await softDeleteImage(imageId);
 
-        // If no more photos, go back
-        if (_stateService.totalPhotos == 0) {
+        // Clear snackbar
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+        }
+
+        if (result['success'] == true) {
+          // Delete from local repository
+          await _localRepo.deletePhoto(photo.id);
+
+          // Remove from state
+          _stateService.removeCurrentPhoto();
+
+          // If no more photos, go back
+          if (_stateService.totalPhotos == 0) {
+            if (mounted) {
+              Navigator.of(context).pop(true); // Return true to indicate deletion
+            }
+          } else {
+            // Update page controller to current index
+            _pageController.jumpToPage(_stateService.currentIndex);
+          }
+
           if (mounted) {
-            Navigator.of(context).pop(true); // Return true to indicate deletion
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('사진이 휴지통으로 이동되었습니다'),
+                backgroundColor: Colors.green,
+              ),
+            );
           }
         } else {
-          // Update page controller to current index
-          _pageController.jumpToPage(_stateService.currentIndex);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('삭제 실패: ${result['error'] ?? '알 수 없는 오류'}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
-
+      } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('사진이 삭제되었습니다')));
-        }
-      } else {
-        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('사진 삭제 실패'),
+            SnackBar(
+              content: Text('삭제 중 오류 발생: $e'),
               backgroundColor: Colors.red,
             ),
           );
@@ -230,17 +277,79 @@ class _PhotoDetailPageState extends State<PhotoDetailPage> {
     }
   }
 
-  void _showMetadata() {
+  void _showMetadata() async {
     final photo = _stateService.currentPhoto;
     if (photo == null) return;
 
-    showModalBottomSheet(
+    // Show loading indicator
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) =>
-          PhotoMetadataBottomSheet(photo: photo, stateService: _stateService),
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
     );
+
+    try {
+      // Fetch updated image details with tags from backend
+      final updatedPhoto = await tag_service.fetchImageDetails(photo.id);
+
+      // Close loading indicator
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Merge updated AI tags with existing user tags
+      Photo photoToShow;
+      if (updatedPhoto != null) {
+        // Preserve existing user tags and update with new AI tags
+        photoToShow = updatedPhoto.copyWith(
+          metadata: updatedPhoto.metadata.copyWith(
+            userTags: photo.metadata.userTags, // Keep existing user tags
+          ),
+        );
+      } else {
+        photoToShow = photo;
+      }
+
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => PhotoMetadataBottomSheet(
+            photo: photoToShow,
+            stateService: _stateService,
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading indicator
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('태그 정보를 불러오는데 실패했습니다: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        // Show metadata anyway with current photo
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => PhotoMetadataBottomSheet(
+            photo: photo,
+            stateService: _stateService,
+          ),
+        );
+      }
+    }
   }
 
   @override

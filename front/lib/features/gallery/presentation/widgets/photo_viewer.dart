@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import '../../data/models/photo_models.dart';
 import '../../data/repositories/local_photo_repository.dart';
+import '../../domain/download_service.dart';
 
 class PhotoViewer extends StatelessWidget {
   final List<Photo> photos;
@@ -108,68 +109,101 @@ class _PhotoImageWidgetState extends State<PhotoImageWidget> {
   }
 
   Widget _buildNetworkImage() {
-    if (widget.photo.remoteUrl != null && widget.photo.remoteUrl!.isNotEmpty) {
-      return Image.network(
-        widget.photo.remoteUrl!,
-        fit: BoxFit.contain,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
-                  color: Colors.white,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  '원본 이미지 다운로드 중...',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
+    // API에서 view URL 받아오기
+    return FutureBuilder<ImageViewableResponse?>(
+      future: getImageViewUrl(int.parse(widget.photo.id)),
+      builder: (context, urlSnapshot) {
+        // URL 받아오는 중
+        if (urlSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, color: Colors.white70, size: 64),
+                CircularProgressIndicator(color: Colors.white),
                 SizedBox(height: 16),
                 Text(
-                  '이미지를 불러올 수 없습니다',
+                  '이미지 URL 조회 중...',
                   style: TextStyle(color: Colors.white70),
                 ),
               ],
             ),
           );
-        },
-      );
-    } else {
-      // remoteUrl도 없으면 업로드 대기 중
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: Colors.white),
-            SizedBox(height: 16),
-            Text(
-              '백엔드 업로드 중...',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+        }
+
+        // URL 받아오기 실패
+        if (urlSnapshot.hasError || !urlSnapshot.hasData || urlSnapshot.data == null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white70, size: 64),
+                const SizedBox(height: 16),
+                const Text(
+                  '이미지 URL을 가져올 수 없습니다',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 8),
+                if (urlSnapshot.hasError)
+                  Text(
+                    '오류: ${urlSnapshot.error}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+              ],
             ),
-            SizedBox(height: 8),
-            Text(
-              '잠시만 기다려주세요',
-              style: TextStyle(color: Colors.white54, fontSize: 14),
-            ),
-          ],
-        ),
-      );
-    }
+          );
+        }
+
+        // URL 받아오기 성공 - 이미지 로드
+        final viewUrl = urlSnapshot.data!.url;
+        return Image.network(
+          viewUrl,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '이미지 다운로드 중...',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white70, size: 64),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '이미지를 불러올 수 없습니다',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'URL: $viewUrl',
+                    style: const TextStyle(color: Colors.white54, fontSize: 10),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

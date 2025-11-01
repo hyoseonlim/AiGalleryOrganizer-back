@@ -3,8 +3,14 @@ class PhotoTag {
   final String id;
   final String name;
   final TagType type;
+  final String? category; // AI 태그의 카테고리 (예: "animal", "object", "scene")
 
-  const PhotoTag({required this.id, required this.name, required this.type});
+  const PhotoTag({
+    required this.id,
+    required this.name,
+    required this.type,
+    this.category,
+  });
 
   factory PhotoTag.fromMap(Map<String, dynamic> map) {
     return PhotoTag(
@@ -14,11 +20,25 @@ class PhotoTag {
         (e) => e.name == map['type'],
         orElse: () => TagType.system,
       ),
+      category: map['category'] as String?,
     );
   }
 
   Map<String, dynamic> toMap() {
-    return {'id': id, 'name': name, 'type': type.name};
+    return {
+      'id': id,
+      'name': name,
+      'type': type.name,
+      if (category != null) 'category': category,
+    };
+  }
+
+  /// Returns formatted display name with category (for AI tags)
+  String get displayName {
+    if (type == TagType.system && category != null && category!.isNotEmpty) {
+      return '$category:$name';
+    }
+    return name;
   }
 
   @override
@@ -30,7 +50,7 @@ class PhotoTag {
   int get hashCode => id.hashCode;
 
   @override
-  String toString() => 'PhotoTag(id: $id, name: $name, type: $type)';
+  String toString() => 'PhotoTag(id: $id, name: $name, type: $type, category: $category)';
 }
 
 enum TagType {
