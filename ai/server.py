@@ -59,10 +59,10 @@ target_layer_name = 'dropout'
 
 # Response Models
 class ImageAnalysisResponse(BaseModel):
-    class_name: str
+    tag_name: str
     probability: float
-    recommended_tag: Optional[str] = None
-    recommended_tag_probability: Optional[float] = None
+    category: Optional[str] = None
+    category_probability: Optional[float] = None
     quality_score: Optional[float] = None
     feature_vector: Optional[List[List[float]]] = None
 
@@ -152,10 +152,10 @@ async def analyze_image(
     - **candidate_labels**: (선택) 계층적 분류를 위한 후보 레이블 목록 (앨범 이름 등)
     
     Returns:
-        - class_name: 이미지 분류명
+        - tag_name: 이미지 분류명
         - probability: 분류 확률 (%)
-        - recommended_tag: 추천 상위 태그 (candidate_labels 제공 시)
-        - recommended_tag_probability: 추천 태그 확률 (%)
+        - category: 추천 상위 태그 (candidate_labels 제공 시)
+        - category_probability: 추천 태그 확률 (%)
         - quality_score: 이미지 품질 점수 (0-1)
         - feature_vector: 추출된 feature vector (2D array)
     """
@@ -218,10 +218,10 @@ async def analyze_image(
                 logger.warning(f"Hierarchical classification failed: {e}")
         
         response = ImageAnalysisResponse(
-            class_name=class_name,
+            tag_name=class_name,
             probability=round(probability, 2),
-            recommended_tag=recommended_tag,
-            recommended_tag_probability=round(recommended_tag_prob, 2) if recommended_tag_prob else None,
+            category=recommended_tag,
+            category_probability=round(recommended_tag_prob, 2) if recommended_tag_prob else None,
             quality_score=round(quality_score, 4) if quality_score else None,
             feature_vector=feature_vector
         )
