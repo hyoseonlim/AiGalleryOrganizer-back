@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
+
+import 'package:front/core/network/network_policy_service.dart';
+
 import 'models/api_response.dart';
 
 // Logging levels
@@ -12,10 +15,7 @@ class GalleryApiClient {
   final String baseUrl;
   final http.Client? httpClient;
 
-  GalleryApiClient({
-    this.baseUrl = 'http://localhost:8000',
-    this.httpClient,
-  });
+  GalleryApiClient({this.baseUrl = 'http://localhost:8000', this.httpClient});
 
   http.Client get _client => httpClient ?? http.Client();
 
@@ -57,6 +57,8 @@ class GalleryApiClient {
       final uri = _buildUri(endpoint, queryParams);
       _log('GET 요청: $uri', level: _LogLevel.debug);
 
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+
       final response = await _client.get(
         uri,
         headers: _getHeaders(additionalHeaders: headers),
@@ -80,6 +82,8 @@ class GalleryApiClient {
       final uri = _buildUri(endpoint);
       _log('POST 요청: $uri', level: _LogLevel.debug);
 
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+
       final response = await _client.post(
         uri,
         headers: _getHeaders(additionalHeaders: headers),
@@ -102,6 +106,8 @@ class GalleryApiClient {
     try {
       _log('PUT 요청 (bytes): $url', level: _LogLevel.debug);
 
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+
       final response = await _client.put(
         Uri.parse(url),
         headers: headers,
@@ -112,7 +118,10 @@ class GalleryApiClient {
         _log('PUT 요청 성공', level: _LogLevel.debug);
         return ApiResponse.success(data: null, statusCode: response.statusCode);
       } else {
-        _log('PUT 요청 실패 (status: ${response.statusCode})', level: _LogLevel.warning);
+        _log(
+          'PUT 요청 실패 (status: ${response.statusCode})',
+          level: _LogLevel.warning,
+        );
         return ApiResponse.failure(
           error: 'Upload failed',
           statusCode: response.statusCode,
@@ -134,6 +143,8 @@ class GalleryApiClient {
       final uri = _buildUri(endpoint);
       _log('DELETE 요청: $uri', level: _LogLevel.debug);
 
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+
       final response = await _client.delete(
         uri,
         headers: _getHeaders(additionalHeaders: headers),
@@ -154,19 +165,24 @@ class GalleryApiClient {
     try {
       _log('GET 요청 (bytes): $url', level: _LogLevel.debug);
 
-      final response = await _client.get(
-        Uri.parse(url),
-        headers: headers,
-      );
+      await NetworkPolicyService.instance.ensureAllowedConnectivity();
+
+      final response = await _client.get(Uri.parse(url), headers: headers);
 
       if (response.statusCode == 200) {
-        _log('GET 요청 성공 (bytes: ${response.bodyBytes.length})', level: _LogLevel.debug);
+        _log(
+          'GET 요청 성공 (bytes: ${response.bodyBytes.length})',
+          level: _LogLevel.debug,
+        );
         return ApiResponse.success(
           data: response.bodyBytes,
           statusCode: response.statusCode,
         );
       } else {
-        _log('GET 요청 실패 (status: ${response.statusCode})', level: _LogLevel.warning);
+        _log(
+          'GET 요청 실패 (status: ${response.statusCode})',
+          level: _LogLevel.warning,
+        );
         return ApiResponse.failure(
           error: 'Download failed',
           statusCode: response.statusCode,
@@ -182,9 +198,11 @@ class GalleryApiClient {
   Uri _buildUri(String endpoint, [Map<String, dynamic>? queryParams]) {
     final uri = Uri.parse('$baseUrl$endpoint');
     if (queryParams != null && queryParams.isNotEmpty) {
-      return uri.replace(queryParameters: queryParams.map(
-        (key, value) => MapEntry(key, value.toString()),
-      ));
+      return uri.replace(
+        queryParameters: queryParams.map(
+          (key, value) => MapEntry(key, value.toString()),
+        ),
+      );
     }
     return uri;
   }
@@ -241,10 +259,7 @@ class GalleryApiClient {
           statusCode: statusCode,
         );
       } catch (e) {
-        return ApiResponse.failure(
-          error: '검증 오류',
-          statusCode: statusCode,
-        );
+        return ApiResponse.failure(error: '검증 오류', statusCode: statusCode);
       }
     }
 

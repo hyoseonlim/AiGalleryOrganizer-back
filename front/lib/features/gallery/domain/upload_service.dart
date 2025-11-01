@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:front/features/auth/data/auth_repository.dart';
+import 'package:front/core/network/network_policy_service.dart';
 import 'thumbnail_service.dart';
 import '../data/repositories/local_photo_repository.dart';
 import '../data/models/photo_models.dart';
@@ -46,6 +47,7 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
 /// Returns PresignedUrlResponse or throws an exception
 Future<PresignedUrlResponse> requestPresignedUrls(int imageCount) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_uploadRequestEndpoint');
     _log('Presigned URL 요청: $imageCount개의 이미지');
 
@@ -97,6 +99,7 @@ Future<Map<String, dynamic>> uploadToPresignedUrl(
   String? contentType,
 }) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final fileBytes = await file.readAsBytes();
     _log(
       'Presigned URL로 파일 업로드 중: ${path.basename(file.path)} (${fileBytes.length} bytes)',
@@ -219,6 +222,7 @@ Future<List<Map<String, dynamic>>> uploadMultipleFilesWithPresignedUrls(
 /// Returns UploadCompleteResponse or throws an exception
 Future<UploadCompleteResponse> notifyUploadComplete(int imageId) async {
   try {
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_uploadCompleteEndpoint');
     _log('업로드 완료 알림: image_id=$imageId');
 

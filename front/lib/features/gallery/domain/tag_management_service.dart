@@ -1,11 +1,15 @@
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:front/core/network/network_policy_service.dart';
+
 import '../data/models/photo_models.dart';
 
 // Backend server configuration
-const String _baseUrl = 'https://your-backend-api.com'; // TODO: Replace with actual backend URL
-const String _tagEndpoint = '/api/v1/photos';           // TODO: Replace with actual endpoint
+const String _baseUrl =
+    'https://your-backend-api.com'; // TODO: Replace with actual backend URL
+const String _tagEndpoint =
+    '/api/v1/photos'; // TODO: Replace with actual endpoint
 
 // Logging configuration
 enum LogLevel { debug, info, warning, error }
@@ -25,6 +29,7 @@ Future<PhotoTag?> addUserTag(String photoId, String tagName) async {
   try {
     final uri = Uri.parse('$_baseUrl$_tagEndpoint/$photoId/tags');
 
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     _log('사용자 태그 추가 요청: $photoId - $tagName');
 
     final response = await http.post(
@@ -34,10 +39,7 @@ Future<PhotoTag?> addUserTag(String photoId, String tagName) async {
         // Add authorization header if needed
         // 'Authorization': 'Bearer YOUR_TOKEN',
       },
-      body: jsonEncode({
-        'name': tagName,
-        'type': 'user',
-      }),
+      body: jsonEncode({'name': tagName, 'type': 'user'}),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -45,8 +47,10 @@ Future<PhotoTag?> addUserTag(String photoId, String tagName) async {
       _log('태그 추가 성공: $tagName', level: LogLevel.info);
       return PhotoTag.fromMap(data);
     } else {
-      _log('태그 추가 실패 (상태 코드: ${response.statusCode}): $tagName',
-          level: LogLevel.warning);
+      _log(
+        '태그 추가 실패 (상태 코드: ${response.statusCode}): $tagName',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {
@@ -60,6 +64,7 @@ Future<bool> deleteTag(String photoId, String tagId) async {
   try {
     final uri = Uri.parse('$_baseUrl$_tagEndpoint/$photoId/tags/$tagId');
 
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     _log('태그 삭제 요청: $photoId - $tagId');
 
     final response = await http.delete(
@@ -75,8 +80,10 @@ Future<bool> deleteTag(String photoId, String tagId) async {
       _log('태그 삭제 성공: $tagId', level: LogLevel.info);
       return true;
     } else {
-      _log('태그 삭제 실패 (상태 코드: ${response.statusCode}): $tagId',
-          level: LogLevel.warning);
+      _log(
+        '태그 삭제 실패 (상태 코드: ${response.statusCode}): $tagId',
+        level: LogLevel.warning,
+      );
       return false;
     }
   } catch (e) {
@@ -90,6 +97,7 @@ Future<PhotoMetadata?> fetchPhotoMetadata(String photoId) async {
   try {
     final uri = Uri.parse('$_baseUrl$_tagEndpoint/$photoId/metadata');
 
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     _log('메타데이터 요청: $photoId');
 
     final response = await http.get(
@@ -106,8 +114,10 @@ Future<PhotoMetadata?> fetchPhotoMetadata(String photoId) async {
       _log('메타데이터 로드 성공: $photoId', level: LogLevel.info);
       return PhotoMetadata.fromMap(data);
     } else {
-      _log('메타데이터 로드 실패 (상태 코드: ${response.statusCode}): $photoId',
-          level: LogLevel.warning);
+      _log(
+        '메타데이터 로드 실패 (상태 코드: ${response.statusCode}): $photoId',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {
@@ -124,6 +134,7 @@ Future<PhotoMetadata?> updatePhotoTags(
   try {
     final uri = Uri.parse('$_baseUrl$_tagEndpoint/$photoId/tags/batch');
 
+    await NetworkPolicyService.instance.ensureAllowedConnectivity();
     _log('태그 일괄 업데이트 요청: $photoId');
 
     final response = await http.put(
@@ -133,9 +144,7 @@ Future<PhotoMetadata?> updatePhotoTags(
         // Add authorization header if needed
         // 'Authorization': 'Bearer YOUR_TOKEN',
       },
-      body: jsonEncode({
-        'userTags': userTagNames,
-      }),
+      body: jsonEncode({'userTags': userTagNames}),
     );
 
     if (response.statusCode == 200) {
@@ -143,8 +152,10 @@ Future<PhotoMetadata?> updatePhotoTags(
       _log('태그 일괄 업데이트 성공: $photoId', level: LogLevel.info);
       return PhotoMetadata.fromMap(data);
     } else {
-      _log('태그 일괄 업데이트 실패 (상태 코드: ${response.statusCode}): $photoId',
-          level: LogLevel.warning);
+      _log(
+        '태그 일괄 업데이트 실패 (상태 코드: ${response.statusCode}): $photoId',
+        level: LogLevel.warning,
+      );
       return null;
     }
   } catch (e) {
