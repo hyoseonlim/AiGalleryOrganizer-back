@@ -170,10 +170,7 @@ class PhotoCacheService {
   }
 
   /// Gets cached thumbnail for a photo
-  Future<File?> getCachedThumbnail(
-    String photoId, {
-    Duration? maxAge,
-  }) async {
+  Future<File?> getCachedThumbnail(String photoId, {Duration? maxAge}) async {
     try {
       final cacheFile = await _getThumbnailCacheFile(photoId);
       if (cacheFile == null) return null;
@@ -220,7 +217,10 @@ class PhotoCacheService {
   }
 
   /// Caches thumbnail using file path as identifier
-  Future<File?> cacheThumbnailByFilePath(String filePath, List<int> imageBytes) async {
+  Future<File?> cacheThumbnailByFilePath(
+    String filePath,
+    List<int> imageBytes,
+  ) async {
     try {
       // Generate photo ID from file path
       final photoId = _generateCacheKey(filePath);
@@ -320,26 +320,36 @@ class PhotoCacheService {
 
   /// Clears all cache (metadata + thumbnails)
   Future<Map<String, int>> clearAllCache() async {
+    await initialize();
     final metadataCount = await clearAllMetadataCache();
     final thumbnailCount = await clearAllThumbnailCache();
 
-    return {
-      'metadata': metadataCount,
-      'thumbnails': thumbnailCount,
-    };
+    return {'metadata': metadataCount, 'thumbnails': thumbnailCount};
   }
 
   /// Gets cache statistics
   Future<Map<String, dynamic>> getCacheStats() async {
+    await initialize();
     try {
       int metadataCount = 0;
       int thumbnailCount = 0;
       int thumbnailSizeBytes = 0;
+      int metadataSizeBytes = 0;
 
       // Count metadata cache
       if (_prefs != null) {
         final keys = _prefs!.getKeys();
-        metadataCount = keys.where((k) => k.startsWith(_metadataPrefix)).length;
+        for (final key in keys) {
+          if (key.startsWith(_metadataPrefix)) {
+            metadataCount++;
+            final value = _prefs!.getString(key);
+            if (value != null) {
+              metadataSizeBytes += utf8.encode(value).length;
+            }
+          } else if (key.startsWith(_cacheTimestampPrefix)) {
+            metadataSizeBytes += 8; // int timestamp approximation
+          }
+        }
       }
 
       // Count thumbnail cache
@@ -360,7 +370,17 @@ class PhotoCacheService {
         'metadataCount': metadataCount,
         'thumbnailCount': thumbnailCount,
         'thumbnailSizeBytes': thumbnailSizeBytes,
-        'thumbnailSizeMB': (thumbnailSizeBytes / (1024 * 1024)).toStringAsFixed(2),
+        'metadataSizeBytes': metadataSizeBytes,
+        'totalSizeBytes': metadataSizeBytes + thumbnailSizeBytes,
+        'metadataSizeMB': (metadataSizeBytes / (1024 * 1024)).toStringAsFixed(
+          2,
+        ),
+        'thumbnailSizeMB': (thumbnailSizeBytes / (1024 * 1024)).toStringAsFixed(
+          2,
+        ),
+        'totalSizeMB':
+            ((metadataSizeBytes + thumbnailSizeBytes) / (1024 * 1024))
+                .toStringAsFixed(2),
       };
     } catch (e) {
       _log('캐시 통계 조회 오류: $e', isError: true);
@@ -368,7 +388,11 @@ class PhotoCacheService {
         'metadataCount': 0,
         'thumbnailCount': 0,
         'thumbnailSizeBytes': 0,
+        'metadataSizeBytes': 0,
+        'totalSizeBytes': 0,
+        'metadataSizeMB': '0.00',
         'thumbnailSizeMB': '0.00',
+        'totalSizeMB': '0.00',
       };
     }
   }
@@ -381,7 +405,10 @@ class PhotoCacheService {
     try {
       // Clear expired metadata
       if (_prefs != null) {
-        final keys = _prefs!.getKeys().where((k) => k.startsWith(_metadataPrefix)).toList();
+        final keys = _prefs!
+            .getKeys()
+            .where((k) => k.startsWith(_metadataPrefix))
+            .toList();
         for (final key in keys) {
           if (_isCacheExpired(key, maxAge: maxAge)) {
             await _prefs!.remove(key);
@@ -417,9 +444,6 @@ class PhotoCacheService {
       _log('만료된 캐시 삭제 오류: $e', isError: true);
     }
 
-    return {
-      'metadata': expiredMetadata,
-      'thumbnails': expiredThumbnails,
-    };
+    return {'metadata': expiredMetadata, 'thumbnails': expiredThumbnails};
   }
 }
