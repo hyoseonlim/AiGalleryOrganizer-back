@@ -1,21 +1,48 @@
 # app/schemas/image.py
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from app.models.image import AIProcessingStatus
 
-class ImageUploadRequest(BaseModel):
-    image_count: int = Field(..., gt=0, description="Number of images to upload")
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from app.models.image import AIProcessingStatus
 
-class PresignedUrl(BaseModel):
+class ImageHashPayload(BaseModel):
+    client_id: str
+    hash: str
+
+class ImageUploadRequest(BaseModel):
+    images: List[ImageHashPayload]
+
+class UploadInstruction(BaseModel):
+    client_id: str
     image_id: int
     presigned_url: str
 
+class DuplicateInfo(BaseModel):
+    client_id: str
+    existing_image_id: int
+
 class ImageUploadResponse(BaseModel):
-    presigned_urls: List[PresignedUrl]
+    uploads: List[UploadInstruction]
+    duplicates: List[DuplicateInfo]
+
+class ImageMetadata(BaseModel):
+    width: int
+    height: int
+    file_size: Optional[int] = Field(None, alias="fileSize")
+    date_taken: Optional[datetime] = Field(None, alias="dateTaken")
+    mime_type: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    exif_data: Optional[Dict[str, Any]] = Field(None, alias="exifData")
 
 class UploadCompleteRequest(BaseModel):
     image_id: int
+    metadata: ImageMetadata
+
 
 class UploadCompleteResponse(BaseModel):
     image_id: int
@@ -27,6 +54,13 @@ class ImageViewableResponse(BaseModel):
     image_id: int
     url: str
 
+
+class ImageAnalysisResult(BaseModel):
+    tag: str
+    tag_category: str
+    score: float = Field(..., ge=0, le=1)
+    ai_embedding: List[float]
+
 class ImageResponse(BaseModel):
     image_id: int = Field(alias='id')
     url: Optional[str]
@@ -35,3 +69,4 @@ class ImageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
