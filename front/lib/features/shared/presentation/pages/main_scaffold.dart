@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../gallery/presentation/pages/gallery_page.dart';
-import '../../../search/presentation/pages/search_page.dart';
 import '../../../suggestion/presentation/pages/ai_suggestions_page.dart';
-import '../../../album/presentation/pages/albums_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
 
 
@@ -18,9 +16,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   static const List<Widget> _widgetOptions = <Widget>[
     GalleryPage(),
-    SearchPage(),
     AiSuggestionsPage(),
-    AlbumsPage(),
     SettingsPage(),
   ];
 
@@ -43,16 +39,8 @@ class _MainScaffoldState extends State<MainScaffold> {
             label: '갤러리',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: '검색',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.lightbulb_outline),
             label: 'AI 제안',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.photo_album),
-            label: '앨범',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
