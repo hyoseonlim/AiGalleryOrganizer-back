@@ -6,17 +6,19 @@ Redis 메시지 큐를 감시하고 분석 후 백엔드로 결과 전송
 
 import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
+import logging
+import requests
+import json
 
 from celery import Celery
 from typing import List, Optional, Dict, Any
+
 import torch
 from transformers import MobileViTFeatureExtractor, MobileViTForImageClassification, pipeline
 from PIL import Image
 from urllib.request import urlopen
+
 import predict_one_image
-import logging
-import requests
-import json
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +57,7 @@ else:
 
 logger.info(f"Using device: {device}")
 
-# 전역 변수 - 모델들
+# 전역 변수 - 모델
 feature_extractor = None
 model = None
 classifier = None
@@ -66,7 +68,7 @@ target_layer_name = 'dropout'
 BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8080/api/ai/result')  # TODO: 실제 API 경로로 변경
 
 
-# Feature extraction hook
+# Feature map hook
 def get_features(name):
     def hook(model, input, output):
         if isinstance(output, tuple):
@@ -105,10 +107,10 @@ def load_models():
             device=device_id
         )
 
-        logger.info(f"✅ All models loaded successfully on {device}")
+        logger.info(f"All models loaded successfully on {device}")
 
     except Exception as e:
-        logger.error(f"❌ Error loading models: {e}")
+        logger.error(f"Error loading models: {e}")
         raise
 
 
@@ -120,7 +122,7 @@ def worker_init(self):
     return "Models loaded successfully"
 
 
-# 백엔드로 결과 전송 함수
+# 백엔드로 결과 전송
 def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> bool:
     """
     분석 결과를 백엔드 API로 전송합니다.
@@ -150,11 +152,11 @@ def send_result_to_backend(result_data: Dict[str, Any], task_id: str = None) -> 
         )
 
         response.raise_for_status()
-        logger.info(f"✅ Result sent successfully. Response: {response.status_code}")
+        logger.info(f"Result sent successfully. Response: {response.status_code}")
         return True
 
     except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Failed to send result to backend: {e}")
+        logger.error(f"Failed to send result to backend: {e}")
         return False
 
 
@@ -183,7 +185,7 @@ def analyze_image_task(
             - category: 추천 상위 태그
             - category_probability: 추천 태그 확률 (%)
             - quality_score: 이미지 품질 점수 (0-1)
-            - feature_vector: 추출된 feature vector (2D array)
+            - feature_vector: 추출된 feature vector (1x640, list type)
     """
     try:
         # 모델이 로드되지 않았다면 로드
@@ -222,7 +224,7 @@ def analyze_image_task(
                 logger.warning(f"Quality score calculation failed: {e}")
                 quality_score = None
 
-        # Top prediction 추출
+        # Top prediction 추출 (K값 변경을 통해 추천 태그 개수 변경 가능)
         top_probability, top_class_index = torch.topk(logits.softmax(dim=1) * 100, k=1)
 
         class_name = model.config.id2label[top_class_index[0][0].item()]
@@ -236,15 +238,15 @@ def analyze_image_task(
             logger.info(f"Feature vector size: {extracted_features.size()}")
 
         # 계층적 분류
-        recommended_tag = None
-        recommended_tag_prob = None
+        recommended_high_tag = None
+        recommended_high_tag_prob = None
 
         if candidate_labels and len(candidate_labels) > 0:
             try:
                 hierar = classifier(class_name, candidate_labels, multi_label=True)
-                recommended_tag = hierar['labels'][0]
-                recommended_tag_prob = hierar['scores'][0] * 100
-                logger.info(f"Recommended tag: {recommended_tag} ({recommended_tag_prob:.2f}%)")
+                recommended_high_tag = hierar['labels'][0]
+                recommended_high_tag_prob = hierar['scores'][0] * 100
+                logger.info(f"Recommended tag: {recommended_high_tag} ({recommended_high_tag_prob:.2f}%)")
             except Exception as e:
                 logger.warning(f"Hierarchical classification failed: {e}")
 
@@ -252,8 +254,8 @@ def analyze_image_task(
         result = {
             'tag_name': class_name,
             'probability': round(probability, 2),
-            'category': recommended_tag,
-            'category_probability': round(recommended_tag_prob, 2) if recommended_tag_prob else None,
+            'category': recommended_high_tag,
+            'category_probability': round(recommended_high_tag_prob, 2) if recommended_high_tag_prob else None,
             'quality_score': round(quality_score, 4) if quality_score else None,
             'feature_vector': feature_vector,
             'image_url': image_url,
