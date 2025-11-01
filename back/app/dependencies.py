@@ -8,10 +8,12 @@ from app.repositories.image import ImageRepository
 from app.repositories.user import UserRepository
 from app.repositories.tag import TagRepository # Added
 from app.repositories.category import CategoryRepository # Added
+from app.repositories.similar_group_repository import SimilarGroupRepository
 from app.services.image import ImageService
 from app.services.user import UserService
 from app.services.tag import TagService # Added
 from app.services.category import CategoryService # Added
+from app.services.similar_group_service import SimilarGroupService
 from app.schemas.token import TokenData
 from config.config import settings
 from app.security import ALGORITHM
@@ -58,6 +60,15 @@ def get_category_service(
     category_repository: CategoryRepository = Depends(get_category_repository),
 ) -> CategoryService:
     return CategoryService(category_repository)
+
+
+def get_similar_group_repository(db: Session = Depends(get_db)) -> SimilarGroupRepository:
+    return SimilarGroupRepository(db)
+
+def get_similar_group_service(
+    similar_group_repository: SimilarGroupRepository = Depends(get_similar_group_repository),
+) -> SimilarGroupService:
+    return SimilarGroupService(similar_group_repository)
 
 
 async def get_current_user(

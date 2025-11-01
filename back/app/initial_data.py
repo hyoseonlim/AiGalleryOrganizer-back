@@ -1,6 +1,5 @@
 from app.database import SessionLocal, engine, Base
 from app.models import User, Album, Image, Category, Tag # Added Tag
-from app.models.album import AlbumType
 from app.models.image import AIProcessingStatus
 from app.security import get_password_hash
 
@@ -64,9 +63,9 @@ def seed_data():
             db.refresh(image2)
             db.refresh(image3)
 
-            album1 = Album(user_id=user1.id, cover_image_id=image1.id, name="User 1's Travel Album", type=AlbumType.TRAVEL, description="A travel album")
-            album2 = Album(user_id=user1.id, cover_image_id=image2.id, name="User 1's Food Album", type=AlbumType.FOOD, description="A food album")
-            album3 = Album(user_id=user2.id, cover_image_id=image3.id, name="User 2's Custom Album", type=AlbumType.CUSTOM, description="A custom album")
+            album1 = Album(user_id=user1.id, cover_image_id=image1.id, name="User 1's Travel Album", description="A travel album")
+            album2 = Album(user_id=user1.id, cover_image_id=image2.id, name="User 1's Food Album", description="A food album")
+            album3 = Album(user_id=user2.id, cover_image_id=image3.id, name="User 2's Custom Album", description="A custom album")
 
             db.add_all([album1, album2, album3])
             db.commit()

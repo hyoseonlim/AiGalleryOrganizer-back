@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app.models import album, association, image, tag, user, category
-from app.routers import users, images, auth, category, tag # Added tag
+from app.routers import users, images, auth, category, tag, similar_group # Added tag
 from app.celery_worker import celery_app
 from app.initial_data import seed_data # Import seed_data
 
@@ -39,7 +39,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(images.router, prefix="/api/images", tags=["images"])
 app.include_router(category.router, prefix="/api/categories", tags=["categories"])
-app.include_router(tag.router, prefix="/api/tags", tags=["tags"]) # Added
+app.include_router(tag.router, prefix="/api/tags", tags=["tags"])
+app.include_router(similar_group.router, prefix="/api/similar-groups", tags=["similar-groups"])
 
 # Startup/Shutdown 이벤트
 @app.on_event("startup")
