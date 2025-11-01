@@ -38,12 +38,15 @@ class _PhotoMetadataBottomSheetState extends State<PhotoMetadataBottomSheet> {
       final newTag = await addUserTag(widget.photo.id, tagName);
 
       if (newTag != null && mounted) {
-        // Update photo metadata in state
-        final updatedMetadata = widget.photo.metadata.copyWith(
-          userTags: [...widget.photo.metadata.userTags, newTag],
-        );
-        final updatedPhoto = widget.photo.copyWith(metadata: updatedMetadata);
-        widget.stateService.updatePhoto(updatedPhoto);
+        // Update photo metadata in state and refresh UI
+        setState(() {
+          final updatedMetadata = widget.photo.metadata.copyWith(
+            userTags: [...widget.photo.metadata.userTags, newTag],
+          );
+          final updatedPhoto = widget.photo.copyWith(metadata: updatedMetadata);
+          widget.stateService.updatePhoto(updatedPhoto);
+          _isAddingTag = false;
+        });
 
         _tagController.clear();
 
@@ -51,6 +54,7 @@ class _PhotoMetadataBottomSheetState extends State<PhotoMetadataBottomSheet> {
           SnackBar(content: Text('태그 "$tagName"이(가) 추가되었습니다')),
         );
       } else if (mounted) {
+        setState(() => _isAddingTag = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('태그 추가에 실패했습니다'),
@@ -58,9 +62,15 @@ class _PhotoMetadataBottomSheetState extends State<PhotoMetadataBottomSheet> {
           ),
         );
       }
-    } finally {
+    } catch (e) {
       if (mounted) {
         setState(() => _isAddingTag = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('오류 발생: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -92,15 +102,17 @@ class _PhotoMetadataBottomSheetState extends State<PhotoMetadataBottomSheet> {
       final success = await deleteTag(widget.photo.id, tag.id);
 
       if (success && mounted) {
-        // Update photo metadata in state
-        final updatedUserTags = widget.photo.metadata.userTags
-            .where((t) => t.id != tag.id)
-            .toList();
-        final updatedMetadata = widget.photo.metadata.copyWith(
-          userTags: updatedUserTags,
-        );
-        final updatedPhoto = widget.photo.copyWith(metadata: updatedMetadata);
-        widget.stateService.updatePhoto(updatedPhoto);
+        // Update photo metadata in state and refresh UI
+        setState(() {
+          final updatedUserTags = widget.photo.metadata.userTags
+              .where((t) => t.id != tag.id)
+              .toList();
+          final updatedMetadata = widget.photo.metadata.copyWith(
+            userTags: updatedUserTags,
+          );
+          final updatedPhoto = widget.photo.copyWith(metadata: updatedMetadata);
+          widget.stateService.updatePhoto(updatedPhoto);
+        });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('태그 "${tag.name}"이(가) 삭제되었습니다')),
@@ -200,14 +212,14 @@ class _PhotoMetadataBottomSheetState extends State<PhotoMetadataBottomSheet> {
                     if (widget.photo.createdAt != null)
                       _MetadataItem(
                         icon: Icons.calendar_today,
-                        label: '생성일',
+                        label: '업로드 날짜',
                         value: _formatDate(widget.photo.createdAt!),
                       ),
-                    if (metadata.location != null)
+                    if (metadata.dateTaken != null)
                       _MetadataItem(
-                        icon: Icons.location_on,
-                        label: '위치',
-                        value: metadata.location!,
+                        icon: Icons.photo_camera,
+                        label: '촬영 날짜',
+                        value: _formatDate(metadata.dateTaken!),
                       ),
                     if (metadata.camera != null)
                       _MetadataItem(
@@ -221,11 +233,59 @@ class _PhotoMetadataBottomSheetState extends State<PhotoMetadataBottomSheet> {
                         label: '해상도',
                         value: metadata.resolution!,
                       ),
+                    if (metadata.width != null && metadata.height != null)
+                      _MetadataItem(
+                        icon: Icons.photo_size_select_large,
+                        label: '크기 (픽셀)',
+                        value: '${metadata.width} × ${metadata.height}',
+                      ),
+                    if (metadata.mimeType != null)
+                      _MetadataItem(
+                        icon: Icons.insert_drive_file,
+                        label: '파일 형식',
+                        value: metadata.mimeType!,
+                      ),
+                    if (metadata.location != null)
+                      _MetadataItem(
+                        icon: Icons.location_on,
+                        label: '위치',
+                        value: metadata.location!,
+                      ),
+                    if (metadata.latitude != null && metadata.longitude != null)
+                      _MetadataItem(
+                        icon: Icons.gps_fixed,
+                        label: 'GPS 좌표',
+                        value: '${metadata.latitude!.toStringAsFixed(6)}, ${metadata.longitude!.toStringAsFixed(6)}',
+                      ),
 
                     const SizedBox(height: 24),
 
-                    // System tags (AI generated)
-                    if (metadata.systemTags.isNotEmpty) ...[
+                    // Categories (카테고리 - category가 null인 태그들)
+                    if (metadata.systemTags.where((tag) => tag.category == null).isNotEmpty) ...[
+                      const Text(
+                        '카테고리',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: metadata.systemTags
+                            .where((tag) => tag.category == null)
+                            .map((tag) => _TagChip(
+                                  tag: tag,
+                                  onDelete: null, // Categories cannot be deleted
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // AI tags (하위 태그 - category가 있는 태그들)
+                    if (metadata.systemTags.where((tag) => tag.category != null).isNotEmpty) ...[
                       const Text(
                         'AI 태그',
                         style: TextStyle(
@@ -238,9 +298,10 @@ class _PhotoMetadataBottomSheetState extends State<PhotoMetadataBottomSheet> {
                         spacing: 8,
                         runSpacing: 8,
                         children: metadata.systemTags
+                            .where((tag) => tag.category != null)
                             .map((tag) => _TagChip(
                                   tag: tag,
-                                  onDelete: null, // System tags cannot be deleted
+                                  onDelete: null, // AI tags cannot be deleted
                                 ))
                             .toList(),
                       ),
