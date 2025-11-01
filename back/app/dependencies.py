@@ -9,11 +9,13 @@ from app.repositories.user import UserRepository
 from app.repositories.tag import TagRepository
 from app.repositories.category import CategoryRepository
 from app.repositories.similar_group_repository import SimilarGroupRepository
+from app.repositories.album import AlbumRepository
 from app.services.image import ImageService
 from app.services.user import UserService
 from app.services.tag import TagService
 from app.services.category import CategoryService
 from app.services.similar_group_service import SimilarGroupService
+from app.services.album import AlbumService
 from app.schemas.token import TokenData
 from config.config import settings
 from app.security import ALGORITHM
@@ -28,6 +30,9 @@ def get_category_repository(db: Session = Depends(get_db)) -> CategoryRepository
 
 def get_tag_repository(db: Session = Depends(get_db)) -> TagRepository:
     return TagRepository(db)
+
+def get_album_repository(db: Session = Depends(get_db)) -> AlbumRepository:
+    return AlbumRepository(db)
 
 def get_image_service(
     image_repository: ImageRepository = Depends(get_image_repository),
@@ -69,6 +74,12 @@ def get_similar_group_service(
     image_repository: ImageRepository = Depends(get_image_repository),
 ) -> SimilarGroupService:
     return SimilarGroupService(similar_group_repository, image_repository)
+
+
+def get_album_service(
+    album_repository: AlbumRepository = Depends(get_album_repository),
+) -> AlbumService:
+    return AlbumService(album_repository)
 
 
 async def get_current_user(
