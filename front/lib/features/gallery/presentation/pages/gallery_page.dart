@@ -8,6 +8,7 @@ import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'dart:io';
 import 'photo_detail_page.dart';
 import '../widgets/upload_progress_widget.dart';
+import '../widgets/duplicate_detection_dialog.dart';
 
 class GalleryPage extends StatefulWidget {
   const GalleryPage({super.key});
@@ -176,6 +177,18 @@ class _GalleryPageState extends State<GalleryPage> {
       _uploadStateService.finishUpload();
 
       final uploadResult = UploadResult.fromMap(result);
+
+      // Show duplicate detection dialog if duplicates found
+      final duplicates = result['duplicates'] as List<dynamic>? ?? [];
+      final tempIdToFileNameMap = result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
+      if (duplicates.isNotEmpty && mounted) {
+        await DuplicateDetectionDialog.show(
+          context,
+          duplicates: duplicates.map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>)).toList(),
+          tempIdToFileNameMap: tempIdToFileNameMap,
+        );
+      }
+
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -219,6 +232,18 @@ class _GalleryPageState extends State<GalleryPage> {
       _uploadStateService.finishUpload();
 
       final uploadResult = UploadResult.fromMap(result);
+
+      // Show duplicate detection dialog if duplicates found
+      final duplicates = result['duplicates'] as List<dynamic>? ?? [];
+      final tempIdToFileNameMap = result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
+      if (duplicates.isNotEmpty && mounted) {
+        await DuplicateDetectionDialog.show(
+          context,
+          duplicates: duplicates.map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>)).toList(),
+          tempIdToFileNameMap: tempIdToFileNameMap,
+        );
+      }
+
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -262,6 +287,18 @@ class _GalleryPageState extends State<GalleryPage> {
       _uploadStateService.finishUpload();
 
       final uploadResult = UploadResult.fromMap(result);
+
+      // Show duplicate detection dialog if duplicates found
+      final duplicates = result['duplicates'] as List<dynamic>? ?? [];
+      final tempIdToFileNameMap = result['tempIdToFileNameMap'] as Map<int, String>? ?? {};
+      if (duplicates.isNotEmpty && mounted) {
+        await DuplicateDetectionDialog.show(
+          context,
+          duplicates: duplicates.map((d) => DuplicateImageInfo.fromMap(d as Map<String, dynamic>)).toList(),
+          tempIdToFileNameMap: tempIdToFileNameMap,
+        );
+      }
+
       if (uploadResult.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

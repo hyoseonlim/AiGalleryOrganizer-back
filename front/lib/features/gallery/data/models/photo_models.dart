@@ -299,16 +299,19 @@ class UploadResult {
 
 /// Represents a presigned URL for uploading an image
 class PresignedUrlData {
-  final int imageId;
+  final String clientId;      // 클라이언트 ID (요청 시 보낸 ID)
+  final int imageId;          // 실제 서버 이미지 ID
   final String presignedUrl;
 
   const PresignedUrlData({
+    required this.clientId,
     required this.imageId,
     required this.presignedUrl,
   });
 
   factory PresignedUrlData.fromMap(Map<String, dynamic> map) {
     return PresignedUrlData(
+      clientId: map['client_id'] ?? '',
       imageId: map['image_id'] ?? 0,
       presignedUrl: map['presigned_url'] ?? '',
     );
@@ -316,41 +319,50 @@ class PresignedUrlData {
 
   Map<String, dynamic> toMap() {
     return {
+      'client_id': clientId,
       'image_id': imageId,
       'presigned_url': presignedUrl,
     };
   }
 
   @override
-  String toString() => 'PresignedUrlData(imageId: $imageId, presignedUrl: $presignedUrl)';
+  String toString() => 'PresignedUrlData(clientId: $clientId, imageId: $imageId, presignedUrl: $presignedUrl)';
 }
 
 /// Represents the response from presigned URL request
 class PresignedUrlResponse {
   final List<PresignedUrlData> presignedUrls;
+  final List<DuplicateImageInfo> duplicates;  // 중복된 이미지 정보
 
   const PresignedUrlResponse({
     required this.presignedUrls,
+    this.duplicates = const [],
   });
 
   factory PresignedUrlResponse.fromMap(Map<String, dynamic> map) {
-    final urls = (map['presigned_urls'] as List<dynamic>?)
+    final urls = (map['uploads'] as List<dynamic>?)
         ?.map((item) => PresignedUrlData.fromMap(item as Map<String, dynamic>))
+        .toList() ?? [];
+
+    final duplicatesList = (map['duplicates'] as List<dynamic>?)
+        ?.map((item) => DuplicateImageInfo.fromMap(item as Map<String, dynamic>))
         .toList() ?? [];
 
     return PresignedUrlResponse(
       presignedUrls: urls,
+      duplicates: duplicatesList,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'presigned_urls': presignedUrls.map((url) => url.toMap()).toList(),
+      'uploads': presignedUrls.map((url) => url.toMap()).toList(),
+      'duplicates': duplicates.map((dup) => dup.toMap()).toList(),
     };
   }
 
   @override
-  String toString() => 'PresignedUrlResponse(presignedUrls: ${presignedUrls.length})';
+  String toString() => 'PresignedUrlResponse(presignedUrls: ${presignedUrls.length}, duplicates: ${duplicates.length})';
 }
 
 /// Represents a validation error detail from API
@@ -672,4 +684,102 @@ class ImageUploadProgress {
 
   @override
   String toString() => 'ImageUploadProgress(photoId: $photoId, fileName: $fileName, progress: ${(progress * 100).toStringAsFixed(0)}%, failed: $isFailed)';
+}
+
+/// 중복 검사 요청 데이터
+class DuplicateCheckItem {
+  final int tempId;  // 임시 ID (0부터 시작)
+  final String hash;  // 이미지 파일 해시값
+
+  const DuplicateCheckItem({
+    required this.tempId,
+    required this.hash,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'client_id': tempId.toString(),
+      'hash': hash,
+    };
+  }
+
+  @override
+  String toString() => 'DuplicateCheckItem(tempId: $tempId, hash: $hash)';
+}
+
+/// 중복 검사 요청 모델
+class DuplicateCheckRequest {
+  final List<DuplicateCheckItem> images;
+
+  const DuplicateCheckRequest({
+    required this.images,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'images': images.map((item) => item.toMap()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'DuplicateCheckRequest(images: ${images.length})';
+}
+
+/// 중복 이미지 응답 데이터
+class DuplicateImageInfo {
+  final String clientId;      // 클라이언트 ID
+  final int existingImageId;  // 기존 이미지의 실제 ID
+
+  const DuplicateImageInfo({
+    required this.clientId,
+    required this.existingImageId,
+  });
+
+  factory DuplicateImageInfo.fromMap(Map<String, dynamic> map) {
+    return DuplicateImageInfo(
+      clientId: map['client_id'] ?? '',
+      existingImageId: map['existing_image_id'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'client_id': clientId,
+      'existing_image_id': existingImageId,
+    };
+  }
+
+  // tempId를 int로 파싱하는 getter (내부 로직용)
+  int get tempId => int.tryParse(clientId) ?? 0;
+
+  @override
+  String toString() => 'DuplicateImageInfo(clientId: $clientId, existingImageId: $existingImageId)';
+}
+
+/// 중복 검사 응답 모델
+class DuplicateCheckResponse {
+  final List<DuplicateImageInfo> duplicates;
+
+  const DuplicateCheckResponse({
+    required this.duplicates,
+  });
+
+  factory DuplicateCheckResponse.fromMap(Map<String, dynamic> map) {
+    final duplicatesList = (map['duplicates'] as List<dynamic>?)
+        ?.map((item) => DuplicateImageInfo.fromMap(item as Map<String, dynamic>))
+        .toList() ?? [];
+
+    return DuplicateCheckResponse(
+      duplicates: duplicatesList,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'duplicates': duplicates.map((item) => item.toMap()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'DuplicateCheckResponse(duplicates: ${duplicates.length})';
 }

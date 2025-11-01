@@ -10,6 +10,7 @@ import 'package:front/core/network/network_policy_service.dart';
 import 'thumbnail_service.dart';
 import '../data/repositories/local_photo_repository.dart';
 import '../data/models/photo_models.dart';
+import '../utils/file_hash_calculator.dart';
 
 final ImagePicker _imagePicker = ImagePicker();
 
@@ -44,23 +45,28 @@ void _log(String message, {LogLevel level = LogLevel.info, Object? error}) {
 }
 
 /// Requests presigned URLs from the backend for uploading images
-/// Returns PresignedUrlResponse or throws an exception
-Future<PresignedUrlResponse> requestPresignedUrls(int imageCount) async {
+/// 이미지 해시 정보를 함께 보내 중복 검사를 수행
+/// Returns PresignedUrlResponse with presigned URLs and duplicate info
+Future<PresignedUrlResponse> requestPresignedUrls(
+  List<DuplicateCheckItem> images,
+) async {
   try {
     await NetworkPolicyService.instance.ensureAllowedConnectivity();
     final uri = Uri.parse('$_baseUrl$_uploadRequestEndpoint');
-    _log('Presigned URL 요청: $imageCount개의 이미지');
+    _log('Presigned URL 요청: ${images.length}개의 이미지 (중복 검사 포함)');
 
     final response = await http.post(
       uri,
       headers: await _getAuthHeaders(),
-      body: jsonEncode({'image_count': imageCount}),
+      body: jsonEncode({
+        'images': images.map((item) => item.toMap()).toList(),
+      }),
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final presignedResponse = PresignedUrlResponse.fromMap(data);
-      _log('Presigned URL 수신 성공: ${presignedResponse.presignedUrls.length}개');
+      _log('Presigned URL 수신 성공: ${presignedResponse.presignedUrls.length}개, 중복: ${presignedResponse.duplicates.length}개');
       return presignedResponse;
     } else if (response.statusCode == 422) {
       // Validation error
@@ -129,16 +135,26 @@ Future<Map<String, dynamic>> uploadToPresignedUrl(
 }
 
 /// Uploads a single file using presigned URL flow
-/// 1. Request presigned URL from backend
-/// 2. Upload file to presigned URL (S3)
+/// 1. Calculate file hash
+/// 2. Request presigned URL from backend (with duplicate check)
+/// 3. Upload file to presigned URL (S3)
 /// Returns map with success status and image_id
 Future<Map<String, dynamic>?> uploadFileWithPresignedUrl(
   File file, {
   String? contentType,
 }) async {
   try {
-    // 1. Request presigned URL
-    final presignedResponse = await requestPresignedUrls(1);
+    // 1. Calculate file hash
+    final hash = await calculateFileHash(file);
+    if (hash == null) {
+      _log('파일 해시 계산 실패', level: LogLevel.error);
+      return {'success': false, 'error': 'Failed to calculate file hash'};
+    }
+
+    // 2. Request presigned URL
+    final presignedResponse = await requestPresignedUrls([
+      DuplicateCheckItem(tempId: 0, hash: hash),
+    ]);
 
     if (presignedResponse.presignedUrls.isEmpty) {
       _log('Presigned URL을 받지 못했습니다', level: LogLevel.error);
@@ -147,7 +163,7 @@ Future<Map<String, dynamic>?> uploadFileWithPresignedUrl(
 
     final presignedData = presignedResponse.presignedUrls.first;
 
-    // 2. Upload to presigned URL
+    // 3. Upload to presigned URL
     final uploadResult = await uploadToPresignedUrl(
       file,
       presignedData.presignedUrl,
@@ -179,14 +195,27 @@ Future<List<Map<String, dynamic>>> uploadMultipleFilesWithPresignedUrls(
   final results = <Map<String, dynamic>>[];
 
   try {
-    // 1. Request presigned URLs for all files
-    final presignedResponse = await requestPresignedUrls(files.length);
+    // 1. Calculate hashes for all files
+    final duplicateCheckItems = <DuplicateCheckItem>[];
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+      final hash = await calculateFileHash(file);
+      if (hash != null) {
+        duplicateCheckItems.add(DuplicateCheckItem(
+          tempId: i,
+          hash: hash,
+        ));
+      }
+    }
+
+    // 2. Request presigned URLs for all files
+    final presignedResponse = await requestPresignedUrls(duplicateCheckItems);
 
     if (presignedResponse.presignedUrls.length != files.length) {
       _log('요청한 URL 개수와 받은 URL 개수가 다릅니다', level: LogLevel.warning);
     }
 
-    // 2. Upload each file to its presigned URL
+    // 3. Upload each file to its presigned URL
     for (
       var i = 0;
       i < files.length && i < presignedResponse.presignedUrls.length;
@@ -318,13 +347,17 @@ Future<Map<String, dynamic>> pickFile({
     }
 
     // Upload files with paths using new uploadAndSaveFiles
-    final savedPhotos = await uploadAndSaveFiles(
+    final uploadResult = await uploadAndSaveFiles(
       imageFiles,
       onProgress: onProgress,
       onPhotoSaved: onPhotoSaved,
       onStepCompleted: onStepCompleted,
       onStepFailed: onStepFailed,
     );
+
+    final savedPhotos = uploadResult['savedPhotos'] as List<Photo>;
+    final duplicates = uploadResult['duplicates'] as List<DuplicateImageInfo>;
+    final tempIdToFileNameMap = uploadResult['tempIdToFileNameMap'] as Map<int, String>;
 
     final results = <Map<String, dynamic>>[];
     results.addAll(savedPhotos.map((p) => {'photoId': p.id}));
@@ -352,6 +385,8 @@ Future<Map<String, dynamic>> pickFile({
       'failedCount': failedCount,
       'failedFiles': failedFiles,
       'results': results,
+      'duplicates': duplicates,
+      'tempIdToFileNameMap': tempIdToFileNameMap,
     };
   } else {
     _log('파일 선택 취소됨', level: LogLevel.debug);
@@ -401,13 +436,17 @@ Future<Map<String, dynamic>> pickFolder({
       _log('폴더에서 ${files.length}개의 이미지 파일 발견');
 
       // Use new uploadAndSaveFiles
-      final savedPhotos = await uploadAndSaveFiles(
+      final uploadResult = await uploadAndSaveFiles(
         files,
         onProgress: onProgress,
         onPhotoSaved: onPhotoSaved,
         onStepCompleted: onStepCompleted,
         onStepFailed: onStepFailed,
       );
+
+      final savedPhotos = uploadResult['savedPhotos'] as List<Photo>;
+      final duplicates = uploadResult['duplicates'] as List<DuplicateImageInfo>;
+      final tempIdToFileNameMap = uploadResult['tempIdToFileNameMap'] as Map<int, String>;
 
       return {
         'success': true,
@@ -416,6 +455,8 @@ Future<Map<String, dynamic>> pickFolder({
         'failedCount': 0,
         'failedFiles': <String>[],
         'results': savedPhotos.map((p) => {'photoId': p.id}).toList(),
+        'duplicates': duplicates,
+        'tempIdToFileNameMap': tempIdToFileNameMap,
       };
     } catch (e) {
       _log('폴더 처리 중 오류 발생: $e', level: LogLevel.error, error: e);
@@ -460,13 +501,17 @@ Future<Map<String, dynamic>> openGallery({
         .toList();
 
     // Use new uploadAndSaveFiles
-    final savedPhotos = await uploadAndSaveFiles(
+    final uploadResult = await uploadAndSaveFiles(
       files,
       onProgress: onProgress,
       onPhotoSaved: onPhotoSaved,
       onStepCompleted: onStepCompleted,
       onStepFailed: onStepFailed,
     );
+
+    final savedPhotos = uploadResult['savedPhotos'] as List<Photo>;
+    final duplicates = uploadResult['duplicates'] as List<DuplicateImageInfo>;
+    final tempIdToFileNameMap = uploadResult['tempIdToFileNameMap'] as Map<int, String>;
 
     return {
       'success': true,
@@ -475,6 +520,8 @@ Future<Map<String, dynamic>> openGallery({
       'failedCount': 0,
       'failedFiles': <String>[],
       'results': savedPhotos.map((p) => {'photoId': p.id}).toList(),
+      'duplicates': duplicates,
+      'tempIdToFileNameMap': tempIdToFileNameMap,
     };
   } else {
     _log('갤러리 선택 취소됨', level: LogLevel.debug);
@@ -491,11 +538,14 @@ Future<Map<String, dynamic>> openGallery({
 }
 
 /// 파일을 로컬에 저장하고 백엔드에 비동기로 업로드
-/// 1. 썸네일 생성
+/// 0. 파일 해시 계산 및 중복 검사 (백엔드 API 호출)
+/// 1. 중복되지 않은 파일만 썸네일 생성
 /// 2. 로컬에 저장 (즉시 UI에 표시 가능)
 /// 3. 백엔드에 업로드 (비동기)
 /// 4. 메타데이터 수신 및 업데이트 (비동기)
-Future<List<Photo>> uploadAndSaveFiles(
+///
+/// Returns: Map with savedPhotos, duplicates, tempIdToFileNameMap, presignedResponse
+Future<Map<String, dynamic>> uploadAndSaveFiles(
   List<File> files, {
   Function(int current, int total)? onProgress,
   Function(Photo photo)? onPhotoSaved,
@@ -506,14 +556,74 @@ Future<List<Photo>> uploadAndSaveFiles(
 
   _log('파일 업로드 및 저장 시작: ${files.length}개의 파일');
 
+  // 0. 모든 파일의 해시 계산
+  _log('파일 해시 계산 중...');
+  final duplicateCheckItems = <DuplicateCheckItem>[];
+  final tempIdToFile = <int, File>{};
+  final tempIdToFileName = <int, String>{};
+
   for (var i = 0; i < files.length; i++) {
     final file = files[i];
+    final hash = await calculateFileHash(file);
+
+    if (hash != null) {
+      duplicateCheckItems.add(DuplicateCheckItem(
+        tempId: i,
+        hash: hash,
+      ));
+      tempIdToFile[i] = file;
+      tempIdToFileName[i] = path.basename(file.path);
+    } else {
+      _log('해시 계산 실패: ${file.path}', level: LogLevel.warning);
+    }
+  }
+
+  // 1. 백엔드에서 presigned URL 요청 (중복 검사 포함)
+  _log('Presigned URL 요청 및 중복 검사 중...');
+  PresignedUrlResponse? presignedResponse;
+  try {
+    presignedResponse = await requestPresignedUrls(duplicateCheckItems);
+  } catch (e) {
+    _log('Presigned URL 요청 실패: $e', level: LogLevel.error, error: e);
+    return {
+      'savedPhotos': savedPhotos,
+      'duplicates': <DuplicateImageInfo>[],
+      'tempIdToFileNameMap': tempIdToFileName,
+      'presignedResponse': null,
+    };
+  }
+
+  // 2. 중복된 파일의 임시 ID 추출
+  final duplicateTempIds = presignedResponse.duplicates
+      .map((dup) => dup.tempId)
+      .toSet();
+
+  _log('중복 이미지: ${duplicateTempIds.length}개');
+
+  // 3. 중복되지 않은 파일만 처리
+  final nonDuplicateFiles = tempIdToFile.entries
+      .where((entry) => !duplicateTempIds.contains(entry.key))
+      .toList();
+
+  _log('처리할 파일: ${nonDuplicateFiles.length}개 (${duplicateTempIds.length}개 중복 제외)');
+
+  // clientId -> presignedUrlData 매핑 생성
+  final clientIdToPresignedData = <String, PresignedUrlData>{};
+  for (final urlData in presignedResponse.presignedUrls) {
+    clientIdToPresignedData[urlData.clientId] = urlData;
+  }
+
+  for (var i = 0; i < nonDuplicateFiles.length; i++) {
+    final entry = nonDuplicateFiles[i];
+    final tempId = entry.key;
+    final file = entry.value;
+
     try {
-      // 1. 썸네일 생성
+      // 4. 썸네일 생성
       _log('썸네일 생성 중: ${path.basename(file.path)}');
       final thumbnailBytes = await ThumbnailService.generateThumbnail(file);
 
-      // 2. 메타데이터와 썸네일 로컬에 저장
+      // 5. 메타데이터와 썸네일 로컬에 저장
       final photo = await _localRepo.savePhotoMetadata(
         fileName: path.basename(file.path),
         fileSize: await file.length(),
@@ -521,7 +631,7 @@ Future<List<Photo>> uploadAndSaveFiles(
       );
 
       if (photo != null) {
-        // 3. 원본 이미지도 로컬에 저장 (상세 페이지에서 즉시 볼 수 있도록)
+        // 6. 원본 이미지도 로컬에 저장 (상세 페이지에서 즉시 볼 수 있도록)
         final originalBytes = await file.readAsBytes();
         await _localRepo.saveOriginalPhoto(photo.id, originalBytes);
         _log('원본 이미지 로컬 저장 완료: ${photo.id}');
@@ -535,32 +645,46 @@ Future<List<Photo>> uploadAndSaveFiles(
         // 콜백으로 즉시 UI 알림
         onPhotoSaved?.call(photo);
 
-        // 4. 백엔드에 비동기 업로드 (UI 블로킹 없이)
-        _uploadToBackendAsync(photo, file, thumbnailBytes, onStepCompleted, onStepFailed);
+        // 7. 백엔드에 비동기 업로드 (UI 블로킹 없이)
+        // presignedUrlData 전달
+        final presignedData = clientIdToPresignedData[tempId.toString()];
+        _uploadToBackendAsyncWithPresignedUrl(
+          photo,
+          file,
+          thumbnailBytes,
+          presignedData,
+          onStepCompleted,
+          onStepFailed,
+        );
       }
 
-      onProgress?.call(i + 1, files.length);
+      onProgress?.call(i + 1, nonDuplicateFiles.length);
     } catch (e) {
       _log('파일 처리 실패: ${file.path}', level: LogLevel.error, error: e);
     }
   }
 
-  _log('로컬 저장 완료: ${savedPhotos.length}/${files.length}');
+  _log('로컬 저장 완료: ${savedPhotos.length}/${nonDuplicateFiles.length}');
 
-  return savedPhotos;
+  return {
+    'savedPhotos': savedPhotos,
+    'duplicates': presignedResponse.duplicates,
+    'tempIdToFileNameMap': tempIdToFileName,
+    'presignedResponse': presignedResponse,
+  };
 }
 
-/// 백엔드로 비동기 업로드 (UI 블로킹 없음)
-/// Uses the new presigned URL flow:
-/// 1. Request presigned URL
-/// 2. Upload to presigned URL
-/// 3. Notify backend upload complete
+/// 백엔드로 비동기 업로드 (presignedUrlData를 사용)
+/// Uses the presigned URL data from duplicate check:
+/// 1. Upload to presigned URL (already obtained)
+/// 2. Notify backend upload complete
 ///
 /// Note: 썸네일은 로컬에만 저장되며 서버에 업로드되지 않습니다
-Future<void> _uploadToBackendAsync(
+Future<void> _uploadToBackendAsyncWithPresignedUrl(
   Photo photo,
   File file,
   List<int>? thumbnailBytes,
+  PresignedUrlData? presignedData,
   Function(String photoId, ImageUploadStep step)? onStepCompleted,
   Function(String photoId, ImageUploadStep step, String error)? onStepFailed,
 ) async {
@@ -568,11 +692,21 @@ Future<void> _uploadToBackendAsync(
     // 업로드 상태 변경
     await _localRepo.updateUploadStatus(photo.id, UploadStatus.uploading);
 
-    // 1. Request presigned URL and upload file (원본 이미지만 업로드)
-    final uploadResult = await uploadFileWithPresignedUrl(file);
+    if (presignedData == null) {
+      _log('PresignedUrlData가 없습니다: ${photo.id}', level: LogLevel.error);
+      await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
+      onStepFailed?.call(photo.id, ImageUploadStep.upload, 'Presigned URL 데이터 없음');
+      return;
+    }
 
-    if (uploadResult != null && uploadResult['success'] == true) {
-      final imageId = uploadResult['imageId'] as int;
+    // 1. Upload to presigned URL (원본 이미지만 업로드)
+    final uploadResult = await uploadToPresignedUrl(
+      file,
+      presignedData.presignedUrl,
+    );
+
+    if (uploadResult['success'] == true) {
+      final imageId = presignedData.imageId;
 
       // 업로드 단계 완료 알림
       onStepCompleted?.call(photo.id, ImageUploadStep.upload);
@@ -604,7 +738,101 @@ Future<void> _uploadToBackendAsync(
         onStepFailed?.call(photo.id, ImageUploadStep.tagging, '업로드 완료 알림 실패: ${completeError.toString()}');
       }
     } else {
-      final error = uploadResult?['error'] ?? '알 수 없는 오류';
+      final error = uploadResult['error'] ?? '알 수 없는 오류';
+      await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
+      _log('백엔드 업로드 실패: ${photo.id}', level: LogLevel.error);
+
+      // 업로드 단계 실패 알림
+      onStepFailed?.call(photo.id, ImageUploadStep.upload, '백엔드 업로드 실패: $error');
+    }
+  } catch (e) {
+    await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
+    _log('백엔드 업로드 오류: ${photo.id} - $e', level: LogLevel.error, error: e);
+
+    // 업로드 단계 실패 알림
+    onStepFailed?.call(photo.id, ImageUploadStep.upload, '백엔드 업로드 오류: ${e.toString()}');
+  }
+}
+
+/// 백엔드로 비동기 업로드 (UI 블로킹 없음) - 재시도용
+/// Uses the new presigned URL flow:
+/// 1. Request presigned URL
+/// 2. Upload to presigned URL
+/// 3. Notify backend upload complete
+///
+/// Note: 썸네일은 로컬에만 저장되며 서버에 업로드되지 않습니다
+Future<void> _uploadToBackendAsync(
+  Photo photo,
+  File file,
+  List<int>? thumbnailBytes,
+  Function(String photoId, ImageUploadStep step)? onStepCompleted,
+  Function(String photoId, ImageUploadStep step, String error)? onStepFailed,
+) async {
+  try {
+    // 업로드 상태 변경
+    await _localRepo.updateUploadStatus(photo.id, UploadStatus.uploading);
+
+    // 1. Request presigned URL and upload file (원본 이미지만 업로드)
+    final hash = await calculateFileHash(file);
+    if (hash == null) {
+      _log('파일 해시 계산 실패: ${photo.id}', level: LogLevel.error);
+      await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
+      onStepFailed?.call(photo.id, ImageUploadStep.upload, '파일 해시 계산 실패');
+      return;
+    }
+
+    final presignedResponse = await requestPresignedUrls([
+      DuplicateCheckItem(tempId: 0, hash: hash),
+    ]);
+
+    if (presignedResponse.presignedUrls.isEmpty) {
+      _log('Presigned URL을 받지 못했습니다: ${photo.id}', level: LogLevel.error);
+      await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
+      onStepFailed?.call(photo.id, ImageUploadStep.upload, 'Presigned URL 수신 실패');
+      return;
+    }
+
+    final presignedData = presignedResponse.presignedUrls.first;
+
+    final uploadResult = await uploadToPresignedUrl(
+      file,
+      presignedData.presignedUrl,
+    );
+
+    if (uploadResult['success'] == true) {
+      final imageId = presignedData.imageId;
+
+      // 업로드 단계 완료 알림
+      onStepCompleted?.call(photo.id, ImageUploadStep.upload);
+
+      // 2. Notify backend that upload is complete
+      try {
+        final completeResponse = await notifyUploadComplete(imageId);
+
+        // 3. Update local repository with backend data
+        final remoteUrl =
+            '$_baseUrl/api/images/$imageId/view'; // View URL endpoint
+        await _localRepo.updatePhotoFromBackend(
+          photoId: photo.id,
+          remoteUrl: remoteUrl,
+        );
+
+        _log(
+          '백엔드 업로드 완료: ${photo.id} -> imageId=$imageId, hash=${completeResponse.hash}',
+        );
+        await _localRepo.updateUploadStatus(photo.id, UploadStatus.completed);
+
+        // 태깅 단계 완료 알림 (서버에서 AI 태깅 완료 가정)
+        onStepCompleted?.call(photo.id, ImageUploadStep.tagging);
+      } catch (completeError) {
+        _log('업로드 완료 알림 실패: ${photo.id} - $completeError', level: LogLevel.warning, error: completeError);
+        await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
+
+        // 태깅 단계 실패 알림
+        onStepFailed?.call(photo.id, ImageUploadStep.tagging, '업로드 완료 알림 실패: ${completeError.toString()}');
+      }
+    } else {
+      final error = uploadResult['error'] ?? '알 수 없는 오류';
       await _localRepo.updateUploadStatus(photo.id, UploadStatus.failed);
       _log('백엔드 업로드 실패: ${photo.id}', level: LogLevel.error);
 
