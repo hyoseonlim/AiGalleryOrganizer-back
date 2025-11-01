@@ -35,8 +35,9 @@ class PhotoCacheService {
   Future<void> initialize() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      _cacheDir = await getTemporaryDirectory();
-      _log('캐시 서비스 초기화 완료');
+      // 썸네일을 영구 저장소에 저장 (앱 삭제 전까지 유지)
+      _cacheDir = await getApplicationDocumentsDirectory();
+      _log('캐시 서비스 초기화 완료 (영구 저장소)');
     } catch (e) {
       _log('캐시 서비스 초기화 실패: $e', isError: true);
     }
