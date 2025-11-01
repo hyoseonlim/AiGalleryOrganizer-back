@@ -11,13 +11,20 @@ from typing import List
 from app.repositories.image import ImageRepository
 from app.schemas.image import ImageUploadResponse, PresignedUrl, UploadCompleteResponse, ImageResponse, ImageMetadata
 from app.models.user import User
+from app.models.image import Image, AIProcessingStatus
+from app.models.category import Category
+from app.models.tag import Tag
+from app.repositories.category import CategoryRepository
+from app.repositories.tag import TagRepository
 from config.config import settings
 
 logger = logging.getLogger(__name__)
 
 class ImageService:
-    def __init__(self, repository: ImageRepository):
+    def __init__(self, repository: ImageRepository, category_repository: CategoryRepository, tag_repository: TagRepository):
         self.repository = repository
+        self.category_repository = category_repository
+        self.tag_repository = tag_repository
 
     def request_upload_urls(
         self, *, s3_client, image_count: int, user: User
@@ -47,7 +54,7 @@ class ImageService:
 
     def notify_upload_complete(
         self, *, image_id: int, hash: str, metadata: ImageMetadata, user: User
-    ) -> UploadCompleteResponse:
+    ) -> Image:
         image = self.repository.find_by_id(image_id, user.id)
 
         if not image:
@@ -68,14 +75,12 @@ class ImageService:
             }
             updated_image = self.repository.update(image, **update_data)
 
-            return UploadCompleteResponse(
-                image_id=updated_image.id,
-                status="completed",
-                hash=updated_image.hash
-            )
+            return updated_image
+        except HTTPException as e:
+            raise e
         except Exception as e:
-            logger.error(f"An error occurred: {e}")
-            raise HTTPException(status_code=500, detail="An internal error occurred.")
+            logger.error(f"An unexpected error occurred: {e}")
+            raise HTTPException(status_code=500, detail="An internal server error occurred during image processing.")
 
     def get_viewable_url(self, *, image_id: int, user: User) -> str:
         if not settings.CLOUDFRONT_DOMAIN:
@@ -136,3 +141,41 @@ class ImageService:
     def get_all_images_by_user(self, *, user: User) -> List[ImageResponse]:
         images = self.repository.find_all_by_user(user.id)
         return [ImageResponse.from_orm(img) for img in images]
+
+    def update_image_analysis_results(
+        self,
+        db: Session,
+        image_id: int,
+        tag: str,
+        tag_category: str,
+        score: float,
+        ai_embedding: List[float],
+    ) -> Image:
+        image = self.repository.find_by_id_for_analysis(image_id)
+        if not image:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+
+        # Handle Category
+        category = self.category_repository.find_by_name(tag_category)
+        if not category:
+            from app.schemas.category import CategoryCreate # Import locally to avoid circular dependency
+            category_create_schema = CategoryCreate(name=tag_category)
+            category = self.category_repository.create(category_create_schema)
+
+        # Handle Tag
+        tag_obj = self.tag_repository.find_by_name_and_category_id(tag, category.id)
+        if not tag_obj:
+            from app.schemas.tag import TagCreate # Import locally to avoid circular dependency
+            tag_create_schema = TagCreate(name=tag, category_id=category.id)
+            tag_obj = self.tag_repository.create(tag_create_schema)
+
+        # Update Image
+        updated_image = self.repository.update(
+            image,
+            ai_embedding=ai_embedding,
+            score=score,
+            tag_id=tag_obj.id,
+            ai_processing_status=AIProcessingStatus.COMPLETED
+        )
+
+        return updated_image

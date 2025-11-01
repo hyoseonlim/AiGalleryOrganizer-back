@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     AWS_REGION: str = os.getenv("AWS_REGION", "ap-northeast-2")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "vizota-bucket")
     CLOUDFRONT_DOMAIN: str | None = os.getenv("CLOUDFRONT_DOMAIN")
+    GENERAL_SERVER_URL: str = os.getenv("GENERAL_SERVER_URL", "http://localhost:8000")
     
     class Config:
         env_file = ".env"

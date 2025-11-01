@@ -41,6 +41,14 @@ class ImageViewableResponse(BaseModel):
     image_id: int
     url: str
 
+from pydantic import BaseModel, Field
+
+class ImageAnalysisResult(BaseModel):
+    tag: str
+    tag_category: str
+    score: float = Field(..., ge=0, le=1)
+    ai_embedding: List[float]
+
 class ImageResponse(BaseModel):
     image_id: int = Field(alias='id')
     url: Optional[str]
@@ -49,3 +57,4 @@ class ImageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

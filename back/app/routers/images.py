@@ -12,14 +12,15 @@ from app.schemas.image import (
     UploadCompleteResponse,
     ImageViewableResponse,
     ImageResponse,
+    ImageAnalysisResult,
 )
 from app.models.user import User
 from app.services.image import ImageService
 from app.services.user import UserService
+from app.tasks import analyze_image_task
+from config.config import settings
 
-router = APIRouter(
-    tags=["images"],
-)
+router = APIRouter(tags=["images"])
 
 @router.post("/upload/request", response_model=ImageUploadResponse)
 def request_upload_urls(
@@ -48,11 +49,24 @@ def notify_upload_complete(
     """
     Notify the server that an image upload is complete and trigger processing.
     """
-    return image_service.notify_upload_complete(
+    updated_image = image_service.notify_upload_complete(
         image_id=request.image_id,
         hash=request.hash,
         metadata=request.metadata,
         user=current_user
+    )
+
+    if settings.CLOUDFRONT_DOMAIN:
+        full_image_url = f"https://{settings.CLOUDFRONT_DOMAIN}/{updated_image.url}"
+        analyze_image_task.delay(image_id=updated_image.id, image_url=full_image_url)
+    else:
+        # Handle case where CloudFront is not configured, perhaps log a warning
+        print("CloudFront domain is not configured, skipping AI analysis task.")
+
+    return UploadCompleteResponse(
+        image_id=updated_image.id,
+        status="completed",
+        hash=updated_image.hash
     )
 
 
@@ -101,6 +115,27 @@ def restore_image(
     Restore a soft-deleted image from trash.
     """
     return image_service.restore_image(image_id=image_id, user=current_user)
+
+@router.post("/{image_id}/analysis-results", status_code=status.HTTP_200_OK)
+def receive_analysis_results(
+    image_id: int,
+    results: ImageAnalysisResult,
+    image_service: ImageService = Depends(get_image_service),
+    db: Session = Depends(get_db),
+):
+    """
+    Receives AI analysis results (tag, category, embedding) from the AI server
+    and updates the image in the database.
+    """
+    image_service.update_image_analysis_results(
+        db=db,
+        image_id=image_id,
+        tag=results.tag,
+        tag_category=results.tag_category,
+        score=results.score,
+        ai_embedding=results.ai_embedding,
+    )
+    return {"message": "Analysis results received and processed successfully."}
 
 @router.delete("/trash/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 def permanently_delete_image(
