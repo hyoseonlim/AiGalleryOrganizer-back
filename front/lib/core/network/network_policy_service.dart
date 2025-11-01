@@ -27,10 +27,12 @@ class NetworkPolicyService {
       return;
     }
 
-    final connectivityResult = await _connectivity.checkConnectivity();
-    if (connectivityResult != ConnectivityResult.wifi &&
-        connectivityResult != ConnectivityResult.ethernet &&
-        connectivityResult != ConnectivityResult.vpn) {
+    final connectivityResults = await _connectivity.checkConnectivity();
+    final hasValidConnection = connectivityResults.contains(ConnectivityResult.wifi) ||
+        connectivityResults.contains(ConnectivityResult.ethernet) ||
+        connectivityResults.contains(ConnectivityResult.vpn);
+
+    if (!hasValidConnection) {
       throw NetworkPolicyException('Wi-Fi 연결에서만 이용할 수 있는 기능입니다.');
     }
   }

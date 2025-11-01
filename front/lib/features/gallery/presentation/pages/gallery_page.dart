@@ -3,10 +3,12 @@ import 'package:front/features/gallery/domain/upload_service.dart';
 import 'package:front/features/gallery/domain/upload_state_service.dart';
 import 'package:front/features/gallery/domain/photo_selection_service.dart';
 import 'package:front/features/gallery/domain/gallery_service.dart';
+import 'package:front/features/gallery/domain/trash_service.dart';
 import 'package:front/features/gallery/data/models/photo_models.dart';
 import 'package:front/features/gallery/data/repositories/local_photo_repository.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'dart:io';
+import 'dart:developer' as developer;
 import 'photo_detail_page.dart';
 import 'swipe_clean_page.dart';
 import '../widgets/upload_progress_widget.dart';
@@ -66,7 +68,7 @@ class _GalleryPageState extends State<GalleryPage> {
       final photosByDate = await loadGalleryPhotos(
         onProgress: (current, total) {
           // 로딩 진행 상황 표시 (선택적)
-          print('[GalleryPage] 이미지 로드 진행: $current/$total');
+          developer.log('이미지 로드 진행: $current/$total', name: 'GalleryPage');
         },
       );
 
@@ -164,6 +166,134 @@ class _GalleryPageState extends State<GalleryPage> {
         _searchController.clear();
       }
     });
+  }
+
+  /// Handle delete action for selected photos
+  Future<void> _handleDeleteSelectedPhotos() async {
+    if (!_photoSelectionService.hasSelection) {
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('사진 삭제'),
+        content: Text('선택한 ${_photoSelectionService.selectedCount}개의 사진을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    // Convert photo IDs to integers
+    final selectedPhotoIds = _photoSelectionService.selectedPhotos.toList();
+    final imageIds = <int>[];
+
+    for (final photoId in selectedPhotoIds) {
+      try {
+        imageIds.add(int.parse(photoId));
+      } catch (e) {
+        // Skip invalid IDs
+        developer.log('잘못된 사진 ID: $photoId', name: 'GalleryPage');
+      }
+    }
+
+    if (imageIds.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('삭제할 수 있는 유효한 사진이 없습니다'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${imageIds.length}개의 사진을 삭제하는 중...'),
+            duration: const Duration(seconds: 30),
+          ),
+        );
+      }
+
+      // Delete photos using trash service
+      final result = await softDeleteMultipleImages(
+        imageIds,
+        onProgress: (current, total) {
+          developer.log('삭제 진행: $current/$total', name: 'GalleryPage');
+        },
+      );
+
+      // Clear selection and exit multi-select mode
+      _photoSelectionService.disableMultiSelectMode();
+
+      // Hide loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+
+      // Reload photos to reflect changes
+      await _loadPhotos();
+
+      // Show result
+      if (mounted) {
+        final successCount = result['successCount'] ?? 0;
+        final failedCount = result['failedCount'] ?? 0;
+
+        if (successCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                failedCount > 0
+                    ? '$successCount개 삭제 완료, $failedCount개 실패'
+                    : '$successCount개의 사진이 삭제되었습니다',
+              ),
+              backgroundColor: failedCount > 0 ? Colors.orange : Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('사진 삭제에 실패했습니다'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Clear selection
+      _photoSelectionService.disableMultiSelectMode();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 중 오류 발생: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handlePickFile() async {
@@ -720,9 +850,7 @@ class _GalleryPageState extends State<GalleryPage> {
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
-            onPressed: () {
-              // TODO: Implement delete action for selected photos
-            },
+            onPressed: _handleDeleteSelectedPhotos,
           ),
         ],
       );

@@ -3,7 +3,6 @@ import 'package:front/api/vizota_api.dart';
 import '../../domain/suggestion_service.dart';
 
 class AiSuggestionsPage extends StatefulWidget {
-class AiSuggestionsPage extends StatefulWidget {
   const AiSuggestionsPage({super.key});
 
   @override
@@ -208,8 +207,6 @@ class _AiSuggestionsPageState extends State<AiSuggestionsPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -324,88 +321,7 @@ class _AiSuggestionsPageState extends State<AiSuggestionsPage> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () async {
-              final success = await _controller.rejectGroup(group.id);
-              if (!mounted) return;
-              if (success) {
-                _showSnackBar('제안을 숨겼습니다.');
-              } else if (_controller.errorMessage != null) {
-                _showSnackBar(_controller.errorMessage!);
-              }
-            },
-            icon: const Icon(Icons.close),
-            label: const Text('제안 거절'),
-          ),
-        ),
       ],
     );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.celebration, size: 60, color: Colors.blue.shade300),
-            const SizedBox(height: 16),
-            const Text(
-              '지금은 분석 결과가 없습니다.',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text('필요하면 새로 제안을 생성해보세요.', textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () async {
-                await _controller.refreshSuggestions();
-                if (mounted && _controller.errorMessage != null) {
-                  _showSnackBar(_controller.errorMessage!);
-                }
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('AI 제안 새로 생성'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorState(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _controller.loadSuggestions,
-              child: const Text('다시 시도'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

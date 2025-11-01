@@ -572,7 +572,6 @@ class ImageResponse {
   const ImageResponse({
     required this.id,
     this.url,
-    this.url,
     required this.uploadedAt,
     required this.status,
     this.userId,
@@ -629,7 +628,6 @@ class ImageResponse {
   }
 
   Photo toPhoto({String? viewUrl, String? localThumbnailPath}) {
-    final resolvedUrl = localThumbnailPath ?? viewUrl ?? url;
     return Photo(
       id: id.toString(),
       url: localThumbnailPath ?? viewUrl ?? '',
@@ -669,7 +667,6 @@ class ImageResponse {
 /// 이미지 view URL 응답 (OpenAPI 스펙)
 class ImageViewableResponse {
   final int imageId;
-  final int imageId;
   final String url;
 
   const ImageViewableResponse({
@@ -692,7 +689,6 @@ class ImageViewableResponse {
   }
 
   @override
-  String toString() => 'ImageViewableResponse(imageId: $imageId, url: $url)';
   String toString() => 'ImageViewableResponse(imageId: $imageId, url: $url)';
 }
 
